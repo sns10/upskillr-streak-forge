@@ -1,5 +1,6 @@
 
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { BookOpen, Clock, Trophy } from 'lucide-react';
@@ -67,36 +68,38 @@ const CourseList = () => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {courses.map((course) => (
-        <Card key={course.id} className="hover:shadow-lg transition-shadow cursor-pointer group">
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <CardTitle className="group-hover:text-blue-600 transition-colors">
-                  {course.title}
-                </CardTitle>
-                <CardDescription className="mt-2">
-                  {course.description || 'No description available'}
-                </CardDescription>
-              </div>
-              <BookOpen className="w-6 h-6 text-blue-600 ml-2" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between text-sm text-gray-600">
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-1">
-                  <Clock className="w-4 h-4" />
-                  <span>New</span>
+        <Link key={course.id} to={`/course/${course.id}`}>
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer group h-full">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <CardTitle className="group-hover:text-blue-600 transition-colors">
+                    {course.title}
+                  </CardTitle>
+                  <CardDescription className="mt-2">
+                    {course.description || 'No description available'}
+                  </CardDescription>
                 </div>
-                <div className="flex items-center space-x-1">
-                  <Trophy className="w-4 h-4 text-yellow-500" />
-                  <span>0 XP</span>
-                </div>
+                <BookOpen className="w-6 h-6 text-blue-600 ml-2" />
               </div>
-              <Badge variant="secondary">Published</Badge>
-            </div>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between text-sm text-gray-600">
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-1">
+                    <Clock className="w-4 h-4" />
+                    <span>New</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Trophy className="w-4 h-4 text-yellow-500" />
+                    <span>0 XP</span>
+                  </div>
+                </div>
+                <Badge variant="secondary">Published</Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       ))}
     </div>
   );
