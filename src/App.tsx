@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import AdminSetup from "./pages/AdminSetup";
 import CourseDetail from "./pages/CourseDetail";
 import LessonPlayer from "./pages/LessonPlayer";
 import NotFound from "./pages/NotFound";
@@ -23,6 +24,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/admin-setup" element={<AdminSetup />} />
             <Route path="/course/:courseId" element={<CourseDetail />} />
             <Route path="/lesson/:lessonId" element={<LessonPlayer />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
