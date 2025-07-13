@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -120,7 +119,7 @@ const LessonPlayer = () => {
         .insert({
           user_id: user.id,
           amount: lesson.xp_reward,
-          source: 'video_completion',
+          source: 'lesson_completion',
           source_id: lessonId
         });
 
@@ -135,14 +134,55 @@ const LessonPlayer = () => {
     }
   });
 
-  // Extract YouTube video ID from URL
+  const updateStreakMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error('User required');
+
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { data: currentStreak, error: fetchError } = await supabase
+        .from('streaks')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const lastActivityDate = currentStreak.last_activity_date;
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      let newStreakCount = currentStreak.current_streak;
+
+      if (lastActivityDate === yesterdayStr) {
+        // Continuing streak
+        newStreakCount += 1;
+      } else if (lastActivityDate !== today) {
+        // Starting new streak or broken streak
+        newStreakCount = 1;
+      }
+
+      const { error } = await supabase
+        .from('streaks')
+        .update({
+          current_streak: newStreakCount,
+          longest_streak: Math.max(newStreakCount, currentStreak.longest_streak),
+          last_activity_date: today,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+    }
+  });
+
   const getYouTubeVideoId = (url: string) => {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = url.match(regExp);
     return match && match[2].length === 11 ? match[2] : null;
   };
 
-  // Load YouTube Player API
   useEffect(() => {
     if (!lesson || lesson.type !== 'video') return;
 
@@ -209,11 +249,12 @@ const LessonPlayer = () => {
           const percentage = Math.round((currentTime / duration) * 100);
           setWatchPercentage(percentage);
 
-          // Mark as completed if watched >75% and not already completed
-          if (percentage > 75 && !isCompleted && progress && !progress.completed) {
+          // Mark as completed if watched >80% and not already completed
+          if (percentage > 80 && !isCompleted && progress && !progress.completed) {
             setIsCompleted(true);
             updateProgressMutation.mutate({ watchPercentage: percentage, completed: true });
             awardXPMutation.mutate();
+            updateStreakMutation.mutate();
           } else if (user && !isCompleted) {
             // Update progress every 10% milestone
             if (percentage % 10 === 0 && percentage !== watchPercentage) {
@@ -326,7 +367,7 @@ const LessonPlayer = () => {
                     {isCompleted && (
                       <div className="flex items-center space-x-2 text-green-600 font-medium">
                         <Award className="w-4 h-4" />
-                        <span>Lesson Completed!</span>
+                        <span>Lesson Completed! +{lesson.xp_reward} XP earned</span>
                       </div>
                     )}
                   </div>

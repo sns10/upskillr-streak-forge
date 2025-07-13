@@ -2,11 +2,10 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   BookOpen, 
   Users, 
@@ -15,15 +14,15 @@ import {
   Plus, 
   Edit, 
   Trash2,
-  PlayCircle,
-  FileText,
-  Target,
   Star,
   TrendingUp,
   LogOut,
-  Youtube,
-  ExternalLink
+  CheckCircle,
+  Clock
 } from 'lucide-react';
+import { useAdminStats } from '@/hooks/useAdminStats';
+import { useCourseManagement } from '@/hooks/useCourseManagement';
+import CourseCreationForm from './CourseCreationForm';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -31,51 +30,54 @@ interface AdminDashboardProps {
 
 const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+  const [showCreateCourse, setShowCreateCourse] = useState(false);
+  const { data: stats, isLoading: statsLoading } = useAdminStats();
+  const { publishCourseMutation } = useCourseManagement();
 
-  // Mock data
-  const adminStats = {
-    totalStudents: 1247,
-    activeCourses: 8,
-    totalCompletions: 156,
-    avgEngagement: 78
-  };
+  const { data: courses, isLoading: coursesLoading } = useQuery({
+    queryKey: ['admin-courses'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('courses')
+        .select(`
+          *,
+          modules (
+            id,
+            lessons (id)
+          )
+        `)
+        .order('created_at', { ascending: false });
 
-  const courses = [
-    {
-      id: '1',
-      title: 'React Fundamentals',
-      students: 45,
-      completion: 68,
-      avgXP: 425,
-      status: 'active',
-      lessons: 20
-    },
-    {
-      id: '2',
-      title: 'TypeScript Mastery',
-      students: 32,
-      completion: 45,
-      avgXP: 380,
-      status: 'active',
-      lessons: 25
-    },
-    {
-      id: '3',
-      title: 'JavaScript Basics',
-      students: 78,
-      completion: 89,
-      avgXP: 520,
-      status: 'active',
-      lessons: 15
+      if (error) throw error;
+      return data.map(course => ({
+        ...course,
+        lessonCount: course.modules?.reduce((acc, module) => acc + (module.lessons?.length || 0), 0) || 0,
+        moduleCount: course.modules?.length || 0
+      }));
     }
-  ];
+  });
 
-  const recentActivities = [
-    { student: 'Alex Johnson', action: 'Completed', item: 'React Hooks Quiz', xp: 75 },
-    { student: 'Sarah Chen', action: 'Started', item: 'TypeScript Course', xp: 0 },
-    { student: 'Mike Davis', action: 'Submitted', item: 'Todo App Assignment', xp: 100 },
-  ];
+  const { data: studentLeaderboard } = useQuery({
+    queryKey: ['student-leaderboard'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(`
+          *,
+          user_xp!inner (amount),
+          streaks (current_streak)
+        `)
+        .order('user_xp.amount', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const handlePublishCourse = (courseId: string) => {
+    publishCourseMutation.mutate(courseId);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50">
@@ -100,11 +102,10 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="courses">Courses</TabsTrigger>
             <TabsTrigger value="students">Students</TabsTrigger>
-            <TabsTrigger value="gamification">Gamification</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -117,8 +118,8 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{adminStats.totalStudents}</div>
-                  <p className="text-xs text-muted-foreground">+12% from last month</p>
+                  <div className="text-2xl font-bold">{statsLoading ? '...' : stats?.totalStudents || 0}</div>
+                  <p className="text-xs text-muted-foreground">Registered users</p>
                 </CardContent>
               </Card>
 
@@ -128,8 +129,8 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   <BookOpen className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{adminStats.activeCourses}</div>
-                  <p className="text-xs text-muted-foreground">2 new this month</p>
+                  <div className="text-2xl font-bold">{statsLoading ? '...' : stats?.activeCourses || 0}</div>
+                  <p className="text-xs text-muted-foreground">Published courses</p>
                 </CardContent>
               </Card>
 
@@ -139,8 +140,8 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   <Trophy className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{adminStats.totalCompletions}</div>
-                  <p className="text-xs text-muted-foreground">+8% completion rate</p>
+                  <div className="text-2xl font-bold">{statsLoading ? '...' : stats?.totalCompletions || 0}</div>
+                  <p className="text-xs text-muted-foreground">Lessons completed</p>
                 </CardContent>
               </Card>
 
@@ -150,106 +151,118 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{adminStats.avgEngagement}%</div>
-                  <p className="text-xs text-muted-foreground">Above target</p>
+                  <div className="text-2xl font-bold">{statsLoading ? '...' : stats?.avgEngagement || 0}%</div>
+                  <p className="text-xs text-muted-foreground">Average completion rate</p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Course Performance & Recent Activity */}
-            <div className="grid lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Top Performing Courses</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {courses.slice(0, 3).map((course) => (
-                    <div key={course.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="font-medium">{course.title}</p>
-                        <p className="text-sm text-gray-600">{course.students} students • {course.completion}% completion</p>
-                      </div>
-                      <Badge variant="outline">{course.avgXP} avg XP</Badge>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Student Activity</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {recentActivities.map((activity, index) => (
+            {/* Recent Activity */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Student Activity</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {stats?.recentActivities?.length ? (
+                  stats.recentActivities.map((activity, index) => (
                     <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="font-medium">{activity.student}</p>
-                        <p className="text-sm text-gray-600">{activity.action} {activity.item}</p>
+                      <div className="flex items-center space-x-3">
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                        <div>
+                          <p className="font-medium">{activity.profiles?.full_name || 'Student'}</p>
+                          <p className="text-sm text-gray-600">Completed {activity.lessons?.title || 'lesson'}</p>
+                        </div>
                       </div>
-                      {activity.xp > 0 && <Badge variant="outline">+{activity.xp} XP</Badge>}
+                      <Badge variant="outline">+{activity.lessons?.xp_reward || 0} XP</Badge>
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-center py-4">No recent activity</p>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Courses Tab */}
           <TabsContent value="courses" className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">Course Management</h2>
-              <Button className="flex items-center space-x-2">
+              <Button 
+                className="flex items-center space-x-2"
+                onClick={() => setShowCreateCourse(true)}
+              >
                 <Plus className="w-4 h-4" />
                 <span>Create Course</span>
               </Button>
             </div>
 
             <div className="grid gap-6">
-              {courses.map((course) => (
-                <Card key={course.id}>
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="flex items-center space-x-2">
-                          <span>{course.title}</span>
-                          <Badge variant={course.status === 'active' ? 'default' : 'secondary'}>
-                            {course.status}
+              {coursesLoading ? (
+                <div className="text-center py-8">Loading courses...</div>
+              ) : !courses?.length ? (
+                <div className="text-center py-12">
+                  <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Courses Yet</h3>
+                  <p className="text-gray-600 mb-6">Create your first course to get started.</p>
+                  <Button onClick={() => setShowCreateCourse(true)}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Course
+                  </Button>
+                </div>
+              ) : (
+                courses.map((course) => (
+                  <Card key={course.id}>
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="flex items-center space-x-2">
+                            <span>{course.title}</span>
+                            <Badge variant={course.status === 'published' ? 'default' : 'secondary'}>
+                              {course.status}
+                            </Badge>
+                          </CardTitle>
+                          <CardDescription>
+                            {course.moduleCount} modules • {course.lessonCount} lessons
+                          </CardDescription>
+                        </div>
+                        <div className="flex space-x-2">
+                          {course.status === 'draft' && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handlePublishCourse(course.id)}
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Publish
+                            </Button>
+                          )}
+                          <Button variant="outline" size="sm">
+                            <Edit className="w-4 h-4 mr-1" />
+                            Edit
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-gray-600">{course.description}</p>
+                      <div className="mt-4 flex items-center space-x-4 text-sm text-gray-500">
+                        <span>Created {new Date(course.created_at).toLocaleDateString()}</span>
+                        {course.status === 'published' ? (
+                          <Badge variant="outline" className="text-green-600">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Live
                           </Badge>
-                        </CardTitle>
-                        <CardDescription>
-                          {course.lessons} lessons • {course.students} enrolled students
-                        </CardDescription>
+                        ) : (
+                          <Badge variant="outline" className="text-orange-600">
+                            <Clock className="w-3 h-3 mr-1" />
+                            Draft
+                          </Badge>
+                        )}
                       </div>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm">
-                          <Edit className="w-4 h-4 mr-1" />
-                          Edit
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Trash2 className="w-4 h-4 mr-1" />
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid md:grid-cols-3 gap-4">
-                      <div className="text-center p-3 bg-blue-50 rounded-lg">
-                        <p className="text-2xl font-bold text-blue-600">{course.students}</p>
-                        <p className="text-sm text-gray-600">Students</p>
-                      </div>
-                      <div className="text-center p-3 bg-green-50 rounded-lg">
-                        <p className="text-2xl font-bold text-green-600">{course.completion}%</p>
-                        <p className="text-sm text-gray-600">Completion</p>
-                      </div>
-                      <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                        <p className="text-2xl font-bold text-yellow-600">{course.avgXP}</p>
-                        <p className="text-sm text-gray-600">Avg XP</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
           </TabsContent>
 
@@ -257,164 +270,48 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
           <TabsContent value="students" className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">Student Management</h2>
-              <div className="flex space-x-2">
-                <Input placeholder="Search students..." className="w-64" />
-                <Button variant="outline">Export</Button>
-              </div>
             </div>
 
             <Card>
               <CardHeader>
                 <CardTitle>Student Leaderboard</CardTitle>
-                <CardDescription>Top performing students this month</CardDescription>
+                <CardDescription>Top performing students</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {[
-                    { name: 'Alex Johnson', level: 12, xp: 2850, streak: 7, courses: 3 },
-                    { name: 'Sarah Chen', level: 10, xp: 2340, streak: 5, courses: 2 },
-                    { name: 'Mike Davis', level: 8, xp: 1920, streak: 3, courses: 2 },
-                    { name: 'Emily Rodriguez', level: 11, xp: 2640, streak: 12, courses: 4 },
-                  ].map((student, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                          {index + 1}
+                  {studentLeaderboard?.length ? (
+                    studentLeaderboard.map((student, index) => (
+                      <div key={student.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <p className="font-medium">{student.full_name || 'Student'}</p>
+                            <p className="text-sm text-gray-600">
+                              Streak: {student.streaks?.[0]?.current_streak || 0} days
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{student.name}</p>
-                          <p className="text-sm text-gray-600">Level {student.level} • {student.courses} courses</p>
+                        <div className="flex items-center space-x-4">
+                          <Badge variant="outline">{student.user_xp?.[0]?.amount || 0} XP</Badge>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-4">
-                        <Badge variant="outline">{student.xp} XP</Badge>
-                        <Badge variant="outline">{student.streak} day streak</Badge>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">No students yet</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
-
-          {/* Gamification Tab */}
-          <TabsContent value="gamification" className="space-y-6">
-            <h2 className="text-2xl font-bold">Gamification Settings</h2>
-            
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* XP Settings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Star className="w-5 h-5" />
-                    <span>XP Rewards</span>
-                  </CardTitle>
-                  <CardDescription>Configure experience points for different activities</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4">
-                    <div>
-                      <Label htmlFor="video-xp">Video Completion</Label>
-                      <Input id="video-xp" type="number" defaultValue="50" />
-                    </div>
-                    <div>
-                      <Label htmlFor="quiz-xp">Quiz Completion</Label>
-                      <Input id="quiz-xp" type="number" defaultValue="75" />
-                    </div>
-                    <div>
-                      <Label htmlFor="assignment-xp">Assignment Submission</Label>
-                      <Input id="assignment-xp" type="number" defaultValue="100" />
-                    </div>
-                    <div>
-                      <Label htmlFor="streak-xp">Daily Streak Bonus</Label>
-                      <Input id="streak-xp" type="number" defaultValue="25" />
-                    </div>
-                  </div>
-                  <Button className="w-full">Save XP Settings</Button>
-                </CardContent>
-              </Card>
-
-              {/* Badge Settings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Trophy className="w-5 h-5" />
-                    <span>Badge System</span>
-                  </CardTitle>
-                  <CardDescription>Manage badges and achievement thresholds</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    {[
-                      { name: 'First Course', icon: '🎓', threshold: '1 course' },
-                      { name: 'Week Warrior', icon: '🔥', threshold: '7 day streak' },
-                      { name: 'Quiz Master', icon: '🧠', threshold: '10 quizzes' },
-                      { name: 'Streak Legend', icon: '⚡', threshold: '30 day streak' },
-                    ].map((badge, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <span className="text-xl">{badge.icon}</span>
-                          <div>
-                            <p className="font-medium">{badge.name}</p>
-                            <p className="text-sm text-gray-600">{badge.threshold}</p>
-                          </div>
-                        </div>
-                        <Button variant="outline" size="sm">Edit</Button>
-                      </div>
-                    ))}
-                  </div>
-                  <Button variant="outline" className="w-full">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add New Badge
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Lesson Creator */}
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Youtube className="w-5 h-5" />
-                    <span>Create New Lesson</span>
-                  </CardTitle>
-                  <CardDescription>Add YouTube videos and set XP rewards</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form className="space-y-4">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="lesson-title">Lesson Title</Label>
-                        <Input id="lesson-title" placeholder="Enter lesson title" />
-                      </div>
-                      <div>
-                        <Label htmlFor="lesson-xp">XP Reward</Label>
-                        <Input id="lesson-xp" type="number" placeholder="50" />
-                      </div>
-                    </div>
-                    <div>
-                      <Label htmlFor="youtube-url">YouTube Video URL</Label>
-                      <div className="flex space-x-2">
-                        <Input id="youtube-url" placeholder="https://youtube.com/watch?v=..." className="flex-1" />
-                        <Button variant="outline" type="button">
-                          <ExternalLink className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div>
-                      <Label htmlFor="lesson-description">Description</Label>
-                      <Textarea id="lesson-description" placeholder="Describe what students will learn..." />
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button type="submit">Create Lesson</Button>
-                      <Button variant="outline" type="button">Save as Draft</Button>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
         </Tabs>
       </div>
+
+      {/* Course Creation Modal */}
+      {showCreateCourse && (
+        <CourseCreationForm onClose={() => setShowCreateCourse(false)} />
+      )}
     </div>
   );
 };
