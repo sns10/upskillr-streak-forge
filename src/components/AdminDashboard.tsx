@@ -60,18 +60,48 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { data: studentLeaderboard } = useQuery({
     queryKey: ['student-leaderboard'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // First get user XP totals
+      const { data: xpData, error: xpError } = await supabase
+        .from('user_xp')
+        .select('user_id, amount')
+        .order('amount', { ascending: false })
+        .limit(10);
+
+      if (xpError) throw xpError;
+
+      // Group by user_id and sum XP
+      const userXpTotals = xpData.reduce((acc: Record<string, number>, curr) => {
+        acc[curr.user_id] = (acc[curr.user_id] || 0) + curr.amount;
+        return acc;
+      }, {});
+
+      // Get top users by total XP
+      const topUserIds = Object.entries(userXpTotals)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 10)
+        .map(([userId]) => userId);
+
+      if (!topUserIds.length) return [];
+
+      // Get user profiles and streaks
+      const { data: profiles, error: profileError } = await supabase
         .from('profiles')
         .select(`
           *,
-          user_xp!inner (amount),
           streaks (current_streak)
         `)
-        .order('user_xp.amount', { ascending: false })
-        .limit(10);
+        .in('id', topUserIds);
 
-      if (error) throw error;
-      return data;
+      if (profileError) throw profileError;
+
+      // Combine data and maintain order
+      return topUserIds.map(userId => {
+        const profile = profiles.find(p => p.id === userId);
+        return {
+          ...profile,
+          totalXP: userXpTotals[userId]
+        };
+      }).filter(Boolean);
     }
   });
 
@@ -294,7 +324,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                           </div>
                         </div>
                         <div className="flex items-center space-x-4">
-                          <Badge variant="outline">{student.user_xp?.[0]?.amount || 0} XP</Badge>
+                          <Badge variant="outline">{student.totalXP || 0} XP</Badge>
                         </div>
                       </div>
                     ))

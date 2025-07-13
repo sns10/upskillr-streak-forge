@@ -28,13 +28,13 @@ export const useAdminStats = () => {
         .select('*', { count: 'exact', head: true })
         .eq('completed', true);
 
-      // Get recent activities
+      // Get recent activities with proper joins
       const { data: recentActivities } = await supabase
         .from('user_progress')
         .select(`
           *,
-          profiles:user_id (full_name),
-          lessons:lesson_id (title, type, xp_reward)
+          profiles!user_progress_user_id_fkey (full_name),
+          lessons!user_progress_lesson_id_fkey (title, type, xp_reward)
         `)
         .eq('completed', true)
         .order('completed_at', { ascending: false })
