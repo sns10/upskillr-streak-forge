@@ -28,32 +28,38 @@ export const useAdminStats = () => {
         .select('*', { count: 'exact', head: true })
         .eq('completed', true);
 
-      // Get recent activities - simplified approach
-      const { data: recentActivities } = await supabase
+      // Get recent activities - fetch lessons and profiles separately
+      const { data: recentProgress } = await supabase
         .from('user_progress')
-        .select(`
-          *,
-          lessons (title, type, xp_reward)
-        `)
+        .select('user_id, lesson_id, completed_at')
         .eq('completed', true)
         .order('completed_at', { ascending: false })
         .limit(5);
 
-      // For each activity, get the user profile separately
-      const activitiesWithProfiles = await Promise.all(
-        (recentActivities || []).map(async (activity) => {
+      const recentActivities = [];
+      if (recentProgress) {
+        for (const progress of recentProgress) {
+          // Get lesson details
+          const { data: lesson } = await supabase
+            .from('lessons')
+            .select('title, type, xp_reward')
+            .eq('id', progress.lesson_id)
+            .single();
+
+          // Get user profile
           const { data: profile } = await supabase
             .from('profiles')
             .select('full_name')
-            .eq('id', activity.user_id)
+            .eq('id', progress.user_id)
             .single();
-          
-          return {
-            ...activity,
+
+          recentActivities.push({
+            ...progress,
+            lessons: lesson,
             profiles: profile
-          };
-        })
-      );
+          });
+        }
+      }
 
       // Get course performance
       const { data: coursePerformance } = await supabase
@@ -74,7 +80,7 @@ export const useAdminStats = () => {
         activeCourses: activeCourses || 0,
         totalCompletions: totalCompletions || 0,
         avgEngagement: 78, // Calculate this based on actual data later
-        recentActivities: activitiesWithProfiles || [],
+        recentActivities: recentActivities || [],
         coursePerformance: coursePerformance || []
       };
     },

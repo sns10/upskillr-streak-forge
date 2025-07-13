@@ -60,53 +60,52 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { data: studentLeaderboard } = useQuery({
     queryKey: ['student-leaderboard'],
     queryFn: async () => {
-      // First get user XP totals
+      // Get all user XP records
       const { data: xpData, error: xpError } = await supabase
         .from('user_xp')
-        .select('user_id, amount')
-        .order('amount', { ascending: false });
+        .select('user_id, amount');
 
       if (xpError) throw xpError;
+      if (!xpData || !xpData.length) return [];
 
       // Group by user_id and sum XP
-      const userXpTotals = xpData.reduce((acc: Record<string, number>, curr) => {
-        acc[curr.user_id] = (acc[curr.user_id] || 0) + curr.amount;
-        return acc;
-      }, {});
+      const userXpTotals: Record<string, number> = {};
+      xpData.forEach(xp => {
+        userXpTotals[xp.user_id] = (userXpTotals[xp.user_id] || 0) + xp.amount;
+      });
 
-      // Get top users by total XP
-      const topUserIds = Object.entries(userXpTotals)
+      // Get top 10 users by total XP
+      const topUsers = Object.entries(userXpTotals)
         .sort(([, a], [, b]) => b - a)
-        .slice(0, 10)
-        .map(([userId]) => userId);
+        .slice(0, 10);
 
-      if (!topUserIds.length) return [];
+      if (!topUsers.length) return [];
 
-      // Get user profiles and streaks separately for each user
-      const leaderboardData = await Promise.all(
-        topUserIds.map(async (userId) => {
-          const [profileResult, streakResult] = await Promise.all([
-            supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', userId)
-              .single(),
-            supabase
-              .from('streaks')
-              .select('current_streak')
-              .eq('user_id', userId)
-              .single()
-          ]);
+      // Get profiles and streaks for top users
+      const leaderboardData = [];
+      for (const [userId, totalXP] of topUsers) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
 
-          return {
-            ...profileResult.data,
-            totalXP: userXpTotals[userId],
-            current_streak: streakResult.data?.current_streak || 0
-          };
-        })
-      );
+        const { data: streak } = await supabase
+          .from('streaks')
+          .select('current_streak')
+          .eq('user_id', userId)
+          .single();
 
-      return leaderboardData.filter(Boolean);
+        if (profile) {
+          leaderboardData.push({
+            ...profile,
+            totalXP,
+            current_streak: streak?.current_streak || 0
+          });
+        }
+      }
+
+      return leaderboardData;
     }
   });
 
@@ -200,7 +199,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
               <CardContent className="space-y-4">
                 {stats?.recentActivities?.length ? (
                   stats.recentActivities.map((activity, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div key={`${activity.user_id}-${activity.lesson_id}-${index}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center space-x-3">
                         <CheckCircle className="w-5 h-5 text-green-500" />
                         <div>

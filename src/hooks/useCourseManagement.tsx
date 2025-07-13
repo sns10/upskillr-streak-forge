@@ -55,8 +55,10 @@ export const useCourseManagement = () => {
         description: "Your course has been created successfully.",
       });
       queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
     onError: (error) => {
+      console.error('Course creation error:', error);
       toast({
         title: "Error",
         description: "Failed to create course: " + error.message,
@@ -82,6 +84,14 @@ export const useCourseManagement = () => {
         description: "Module has been added to the course.",
       });
       queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+    },
+    onError: (error) => {
+      console.error('Module creation error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create module: " + error.message,
+        variant: "destructive",
+      });
     }
   });
 
@@ -102,6 +112,14 @@ export const useCourseManagement = () => {
         description: "Lesson has been added successfully.",
       });
       queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+    },
+    onError: (error) => {
+      console.error('Lesson creation error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create lesson: " + error.message,
+        variant: "destructive",
+      });
     }
   });
 
@@ -120,6 +138,42 @@ export const useCourseManagement = () => {
         description: "Course is now available to students.",
       });
       queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+    },
+    onError: (error) => {
+      console.error('Course publish error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to publish course: " + error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  const deleteCourseMutation = useMutation({
+    mutationFn: async (courseId: string) => {
+      const { error } = await supabase
+        .from('courses')
+        .delete()
+        .eq('id', courseId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Course Deleted",
+        description: "Course has been removed successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+    },
+    onError: (error) => {
+      console.error('Course deletion error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete course: " + error.message,
+        variant: "destructive",
+      });
     }
   });
 
@@ -128,5 +182,6 @@ export const useCourseManagement = () => {
     createModuleMutation,
     createLessonMutation,
     publishCourseMutation,
+    deleteCourseMutation,
   };
 };

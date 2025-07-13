@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Save, X } from 'lucide-react';
+import { Plus, Save, X, Trash2 } from 'lucide-react';
 import { useCourseManagement } from '@/hooks/useCourseManagement';
 
 interface Module {
@@ -43,9 +43,8 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
     setModules(modules.filter((_, i) => i !== index));
   };
 
-  const updateModule = (index: number, field: keyof Module, value: string) => {
+  const updateModule = (index: number, field: keyof Omit<Module, 'lessons'>, value: string) => {
     const updated = [...modules];
-    if (field === 'lessons') return;
     updated[index] = { ...updated[index], [field]: value };
     setModules(updated);
   };
@@ -77,11 +76,40 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
     setModules(updated);
   };
 
-  const handleSubmit = async () => {
-    if (!courseTitle.trim()) return;
+  const validateForm = () => {
+    if (!courseTitle.trim()) {
+      throw new Error('Course title is required');
+    }
     
+    if (modules.length === 0) {
+      throw new Error('At least one module is required');
+    }
+
+    modules.forEach((module, moduleIndex) => {
+      if (!module.title.trim()) {
+        throw new Error(`Module ${moduleIndex + 1} title is required`);
+      }
+      
+      if (module.lessons.length === 0) {
+        throw new Error(`Module "${module.title}" must have at least one lesson`);
+      }
+
+      module.lessons.forEach((lesson, lessonIndex) => {
+        if (!lesson.title.trim()) {
+          throw new Error(`Lesson ${lessonIndex + 1} in "${module.title}" must have a title`);
+        }
+        if (lesson.xp_reward < 0) {
+          throw new Error(`Lesson "${lesson.title}" XP reward must be positive`);
+        }
+      });
+    });
+  };
+
+  const handleSubmit = async () => {
     setIsCreating(true);
     try {
+      validateForm();
+
       // Create course
       const course = await createCourseMutation.mutateAsync({
         title: courseTitle,
@@ -140,12 +168,13 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
             {/* Course Details */}
             <div className="space-y-4">
               <div>
-                <Label htmlFor="course-title">Course Title</Label>
+                <Label htmlFor="course-title">Course Title *</Label>
                 <Input
                   id="course-title"
                   value={courseTitle}
                   onChange={(e) => setCourseTitle(e.target.value)}
                   placeholder="Enter course title"
+                  required
                 />
               </div>
               <div>
@@ -155,6 +184,7 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
                   value={courseDescription}
                   onChange={(e) => setCourseDescription(e.target.value)}
                   placeholder="Describe what students will learn"
+                  rows={3}
                 />
               </div>
             </div>
@@ -169,6 +199,10 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
                 </Button>
               </div>
 
+              {modules.length === 0 && (
+                <p className="text-gray-500 text-center py-4">No modules yet. Add your first module to get started.</p>
+              )}
+
               {modules.map((module, moduleIndex) => (
                 <Card key={moduleIndex} className="border-l-4 border-l-blue-500">
                   <CardHeader>
@@ -177,7 +211,8 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
                         <Input
                           value={module.title}
                           onChange={(e) => updateModule(moduleIndex, 'title', e.target.value)}
-                          placeholder="Module title"
+                          placeholder="Module title *"
+                          required
                         />
                         <Textarea
                           value={module.description}
@@ -191,7 +226,7 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
                         size="sm"
                         onClick={() => removeModule(moduleIndex)}
                       >
-                        <X className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </CardHeader>
@@ -209,6 +244,10 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
                         </Button>
                       </div>
 
+                      {module.lessons.length === 0 && (
+                        <p className="text-gray-400 text-sm">No lessons in this module yet.</p>
+                      )}
+
                       {module.lessons.map((lesson, lessonIndex) => (
                         <div key={lessonIndex} className="p-3 bg-gray-50 rounded-lg space-y-3">
                           <div className="flex justify-between items-start">
@@ -216,11 +255,14 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
                               <Input
                                 value={lesson.title}
                                 onChange={(e) => updateLesson(moduleIndex, lessonIndex, 'title', e.target.value)}
-                                placeholder="Lesson title"
+                                placeholder="Lesson title *"
+                                required
                               />
                               <Select
                                 value={lesson.type}
-                                onValueChange={(value) => updateLesson(moduleIndex, lessonIndex, 'type', value)}
+                                onValueChange={(value: 'video' | 'quiz' | 'assignment') => 
+                                  updateLesson(moduleIndex, lessonIndex, 'type', value)
+                                }
                               >
                                 <SelectTrigger>
                                   <SelectValue />
@@ -255,7 +297,7 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
                             <Input
                               type="number"
                               value={lesson.xp_reward}
-                              onChange={(e) => updateLesson(moduleIndex, lessonIndex, 'xp_reward', parseInt(e.target.value) || 50)}
+                              onChange={(e) => updateLesson(moduleIndex, lessonIndex, 'xp_reward', parseInt(e.target.value) || 0)}
                               placeholder="XP Reward"
                               min="0"
                             />
@@ -270,7 +312,7 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
 
             {/* Actions */}
             <div className="flex justify-end space-x-2 pt-4 border-t">
-              <Button variant="outline" onClick={onClose}>
+              <Button variant="outline" onClick={onClose} disabled={isCreating}>
                 Cancel
               </Button>
               <Button onClick={handleSubmit} disabled={!courseTitle.trim() || isCreating}>
