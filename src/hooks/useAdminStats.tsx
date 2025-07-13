@@ -28,17 +28,32 @@ export const useAdminStats = () => {
         .select('*', { count: 'exact', head: true })
         .eq('completed', true);
 
-      // Get recent activities with proper joins
+      // Get recent activities - simplified approach
       const { data: recentActivities } = await supabase
         .from('user_progress')
         .select(`
           *,
-          profiles!user_progress_user_id_fkey (full_name),
-          lessons!user_progress_lesson_id_fkey (title, type, xp_reward)
+          lessons (title, type, xp_reward)
         `)
         .eq('completed', true)
         .order('completed_at', { ascending: false })
         .limit(5);
+
+      // For each activity, get the user profile separately
+      const activitiesWithProfiles = await Promise.all(
+        (recentActivities || []).map(async (activity) => {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', activity.user_id)
+            .single();
+          
+          return {
+            ...activity,
+            profiles: profile
+          };
+        })
+      );
 
       // Get course performance
       const { data: coursePerformance } = await supabase
@@ -59,7 +74,7 @@ export const useAdminStats = () => {
         activeCourses: activeCourses || 0,
         totalCompletions: totalCompletions || 0,
         avgEngagement: 78, // Calculate this based on actual data later
-        recentActivities: recentActivities || [],
+        recentActivities: activitiesWithProfiles || [],
         coursePerformance: coursePerformance || []
       };
     },

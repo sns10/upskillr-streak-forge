@@ -64,8 +64,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       const { data: xpData, error: xpError } = await supabase
         .from('user_xp')
         .select('user_id, amount')
-        .order('amount', { ascending: false })
-        .limit(10);
+        .order('amount', { ascending: false });
 
       if (xpError) throw xpError;
 
@@ -83,25 +82,31 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
       if (!topUserIds.length) return [];
 
-      // Get user profiles and streaks
-      const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select(`
-          *,
-          streaks (current_streak)
-        `)
-        .in('id', topUserIds);
+      // Get user profiles and streaks separately for each user
+      const leaderboardData = await Promise.all(
+        topUserIds.map(async (userId) => {
+          const [profileResult, streakResult] = await Promise.all([
+            supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', userId)
+              .single(),
+            supabase
+              .from('streaks')
+              .select('current_streak')
+              .eq('user_id', userId)
+              .single()
+          ]);
 
-      if (profileError) throw profileError;
+          return {
+            ...profileResult.data,
+            totalXP: userXpTotals[userId],
+            current_streak: streakResult.data?.current_streak || 0
+          };
+        })
+      );
 
-      // Combine data and maintain order
-      return topUserIds.map(userId => {
-        const profile = profiles.find(p => p.id === userId);
-        return {
-          ...profile,
-          totalXP: userXpTotals[userId]
-        };
-      }).filter(Boolean);
+      return leaderboardData.filter(Boolean);
     }
   });
 
@@ -319,7 +324,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                           <div>
                             <p className="font-medium">{student.full_name || 'Student'}</p>
                             <p className="text-sm text-gray-600">
-                              Streak: {student.streaks?.[0]?.current_streak || 0} days
+                              Streak: {student.current_streak || 0} days
                             </p>
                           </div>
                         </div>
