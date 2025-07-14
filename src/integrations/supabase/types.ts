@@ -14,6 +14,84 @@ export type Database = {
   }
   public: {
     Tables: {
+      assignment_submissions: {
+        Row: {
+          assignment_id: string
+          feedback: string | null
+          file_name: string | null
+          file_url: string | null
+          grade: number | null
+          id: string
+          status: string
+          submitted_at: string
+          text_submission: string | null
+          user_id: string
+        }
+        Insert: {
+          assignment_id: string
+          feedback?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          grade?: number | null
+          id?: string
+          status?: string
+          submitted_at?: string
+          text_submission?: string | null
+          user_id: string
+        }
+        Update: {
+          assignment_id?: string
+          feedback?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          grade?: number | null
+          id?: string
+          status?: string
+          submitted_at?: string
+          text_submission?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      assignments: {
+        Row: {
+          allowed_file_types: string[] | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          instructions: string
+          lesson_id: string
+          max_file_size: number | null
+          title: string
+          xp_reward: number
+        }
+        Insert: {
+          allowed_file_types?: string[] | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          instructions: string
+          lesson_id: string
+          max_file_size?: number | null
+          title: string
+          xp_reward?: number
+        }
+        Update: {
+          allowed_file_types?: string[] | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          instructions?: string
+          lesson_id?: string
+          max_file_size?: number | null
+          title?: string
+          xp_reward?: number
+        }
+        Relationships: []
+      }
       badges: {
         Row: {
           condition_type: string
@@ -180,6 +258,33 @@ export type Database = {
           full_name?: string | null
           id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      quiz_results: {
+        Row: {
+          answers: number[]
+          completed_at: string
+          id: string
+          quiz_id: string
+          score: number
+          user_id: string
+        }
+        Insert: {
+          answers: number[]
+          completed_at?: string
+          id?: string
+          quiz_id: string
+          score: number
+          user_id: string
+        }
+        Update: {
+          answers?: number[]
+          completed_at?: string
+          id?: string
+          quiz_id?: string
+          score?: number
+          user_id?: string
         }
         Relationships: []
       }

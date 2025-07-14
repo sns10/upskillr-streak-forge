@@ -6,8 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Save, X, Trash2 } from 'lucide-react';
+import { Plus, Save, X, Trash2, HelpCircle, FileText } from 'lucide-react';
 import { useCourseManagement } from '@/hooks/useCourseManagement';
+import QuizCreator from '@/components/QuizCreator';
+import AssignmentCreator from '@/components/AssignmentCreator';
+import { useQuizManagement } from '@/hooks/useQuizManagement';
+import { useAssignmentManagement } from '@/hooks/useAssignmentManagement';
 
 interface Module {
   title: string;
@@ -29,11 +33,15 @@ interface CourseCreationFormProps {
 
 const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
   const { createCourseMutation, createModuleMutation, createLessonMutation } = useCourseManagement();
+  const { createQuizMutation } = useQuizManagement();
+  const { createAssignmentMutation } = useAssignmentManagement();
   
   const [courseTitle, setCourseTitle] = useState('');
   const [courseDescription, setCourseDescription] = useState('');
   const [modules, setModules] = useState<Module[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [showQuizCreator, setShowQuizCreator] = useState<{ moduleIndex: number; lessonIndex: number } | null>(null);
+  const [showAssignmentCreator, setShowAssignmentCreator] = useState<{ moduleIndex: number; lessonIndex: number } | null>(null);
 
   const addModule = () => {
     setModules([...modules, { title: '', description: '', lessons: [] }]);
@@ -129,7 +137,7 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
         // Create lessons for this module
         for (let j = 0; j < moduleData.lessons.length; j++) {
           const lessonData = moduleData.lessons[j];
-          await createLessonMutation.mutateAsync({
+          const lesson = await createLessonMutation.mutateAsync({
             module_id: module.id,
             title: lessonData.title,
             description: lessonData.description,
@@ -138,6 +146,23 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
             xp_reward: lessonData.xp_reward,
             order_index: j
           });
+
+          // Create quiz or assignment if specified
+          if (lessonData.type === 'quiz' && (lessonData as any).quizData) {
+            await createQuizMutation.mutateAsync({
+              lesson_id: lesson.id,
+              title: `${lessonData.title} Quiz`,
+              questions: (lessonData as any).quizData.questions,
+              xp_reward: lessonData.xp_reward
+            });
+          }
+
+          if (lessonData.type === 'assignment' && (lessonData as any).assignmentData) {
+            await createAssignmentMutation.mutateAsync({
+              lesson_id: lesson.id,
+              ...(lessonData as any).assignmentData
+            });
+          }
         }
       }
 
@@ -250,7 +275,7 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
 
                       {module.lessons.map((lesson, lessonIndex) => (
                         <div key={lessonIndex} className="p-3 bg-gray-50 rounded-lg space-y-3">
-                          <div className="flex justify-between items-start">
+                            <div className="flex justify-between items-start">
                             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                               <Input
                                 value={lesson.title}
@@ -274,13 +299,35 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
                                 </SelectContent>
                               </Select>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeLesson(moduleIndex, lessonIndex)}
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
+                            <div className="flex items-center space-x-2">
+                              {lesson.type === 'quiz' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setShowQuizCreator({ moduleIndex, lessonIndex })}
+                                >
+                                  <HelpCircle className="w-4 h-4 mr-1" />
+                                  Quiz
+                                </Button>
+                              )}
+                              {lesson.type === 'assignment' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setShowAssignmentCreator({ moduleIndex, lessonIndex })}
+                                >
+                                  <FileText className="w-4 h-4 mr-1" />
+                                  Assignment
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeLesson(moduleIndex, lessonIndex)}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
                           <Input
                             value={lesson.content_url}
@@ -322,6 +369,47 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Quiz Creator Modal */}
+        {showQuizCreator && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+              <QuizCreator
+                lessonId="temp"
+                onSave={(title, questions, xpReward) => {
+                  const updated = [...modules];
+                  (updated[showQuizCreator.moduleIndex].lessons[showQuizCreator.lessonIndex] as any).quizData = {
+                    questions,
+                    title
+                  };
+                  updated[showQuizCreator.moduleIndex].lessons[showQuizCreator.lessonIndex].xp_reward = xpReward;
+                  setModules(updated);
+                  setShowQuizCreator(null);
+                }}
+                onCancel={() => setShowQuizCreator(null)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Assignment Creator Modal */}
+        {showAssignmentCreator && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+              <AssignmentCreator
+                lessonId="temp"
+                onSave={(assignmentData) => {
+                  const updated = [...modules];
+                  (updated[showAssignmentCreator.moduleIndex].lessons[showAssignmentCreator.lessonIndex] as any).assignmentData = assignmentData;
+                  updated[showAssignmentCreator.moduleIndex].lessons[showAssignmentCreator.lessonIndex].xp_reward = assignmentData.xp_reward;
+                  setModules(updated);
+                  setShowAssignmentCreator(null);
+                }}
+                onCancel={() => setShowAssignmentCreator(null)}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -8,6 +8,10 @@ import { ArrowLeft, Trophy, CheckCircle, Play, Award } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import QuizPlayer from '@/components/QuizPlayer';
+import AssignmentPlayer from '@/components/AssignmentPlayer';
+import { useQuizManagement } from '@/hooks/useQuizManagement';
+import { useAssignmentManagement } from '@/hooks/useAssignmentManagement';
 
 interface Lesson {
   id: string;
@@ -36,6 +40,10 @@ const LessonPlayer = () => {
   const [isCompleted, setIsCompleted] = useState(false);
   const playerRef = useRef<any>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Quiz and Assignment hooks
+  const { useQuizByLesson, useQuizResults, submitQuizMutation } = useQuizManagement();
+  const { useAssignmentByLesson, useAssignmentSubmission, submitAssignmentMutation } = useAssignmentManagement();
 
   const { data: lesson, isLoading } = useQuery({
     queryKey: ['lesson', lessonId],
@@ -86,6 +94,12 @@ const LessonPlayer = () => {
     },
     enabled: !!user && !!lessonId
   });
+
+  // Fetch quiz and assignment data
+  const { data: quiz } = useQuizByLesson(lessonId || '');
+  const { data: quizResults } = useQuizResults(quiz?.id || '');
+  const { data: assignment } = useAssignmentByLesson(lessonId || '');
+  const { data: assignmentSubmission } = useAssignmentSubmission(assignment?.id || '');
 
   const updateProgressMutation = useMutation({
     mutationFn: async ({ watchPercentage, completed }: { watchPercentage: number; completed: boolean }) => {
@@ -375,25 +389,69 @@ const LessonPlayer = () => {
               </div>
             )}
 
-            {lesson.type === 'quiz' && (
-              <div className="text-center py-12">
-                <Play className="w-16 h-16 text-purple-500 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold mb-2">Quiz Time!</h3>
-                <p className="text-gray-600 mb-6">Test your knowledge with this interactive quiz.</p>
-                <Button>Start Quiz</Button>
+            {/* Quiz Lesson */}
+            {lesson.type === 'quiz' && quiz && (
+              <div className="mb-6">
+                {quizResults && quizResults.score >= 70 ? (
+                  <div className="text-center py-12 border-green-200 bg-green-50 rounded-lg border">
+                    <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-green-800 mb-2">Quiz Completed!</h3>
+                    <p className="text-green-700 mb-4">
+                      You scored {quizResults.score}% on {new Date(quizResults.completed_at).toLocaleDateString()}
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => window.location.reload()}
+                      className="border-green-300 text-green-700 hover:bg-green-100"
+                    >
+                      Retake Quiz
+                    </Button>
+                  </div>
+                ) : (
+                  <QuizPlayer 
+                    quiz={quiz} 
+                    onComplete={(score, answers) => {
+                      submitQuizMutation.mutate({
+                        quiz_id: quiz.id,
+                        score,
+                        answers,
+                        completed_at: new Date().toISOString()
+                      });
+                    }}
+                  />
+                )}
               </div>
             )}
 
-            {lesson.type === 'assignment' && (
+            {lesson.type === 'quiz' && !quiz && (
+              <div className="text-center py-12">
+                <Play className="w-16 h-16 text-purple-500 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold mb-2">Quiz Not Available</h3>
+                <p className="text-gray-600 mb-6">This quiz hasn't been created yet.</p>
+              </div>
+            )}
+
+            {/* Assignment Lesson */}
+            {lesson.type === 'assignment' && assignment && (
+              <AssignmentPlayer 
+                assignment={assignment}
+                submission={assignmentSubmission || undefined}
+                onSubmit={(textSubmission, file) => {
+                  submitAssignmentMutation.mutate({
+                    assignment_id: assignment.id,
+                    text_submission: textSubmission,
+                    file
+                  });
+                }}
+                isSubmitting={submitAssignmentMutation.isPending}
+              />
+            )}
+
+            {lesson.type === 'assignment' && !assignment && (
               <div className="text-center py-12">
                 <Play className="w-16 h-16 text-orange-500 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold mb-2">Assignment</h3>
-                <p className="text-gray-600 mb-6">Complete this assignment to earn XP.</p>
-                <Button asChild>
-                  <a href={lesson.content_url} target="_blank" rel="noopener noreferrer">
-                    Open Assignment
-                  </a>
-                </Button>
+                <h3 className="text-xl font-semibold mb-2">Assignment Not Available</h3>
+                <p className="text-gray-600 mb-6">This assignment hasn't been created yet.</p>
               </div>
             )}
           </CardContent>

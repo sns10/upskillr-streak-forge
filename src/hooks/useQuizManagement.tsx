@@ -42,7 +42,15 @@ export const useQuizManagement = () => {
           .single();
 
         if (error && error.code !== 'PGRST116') throw error;
-        return data;
+        
+        if (data) {
+          return {
+            ...data,
+            questions: (data.questions as any) as QuizQuestion[]
+          };
+        }
+        
+        return null;
       },
       enabled: !!lessonId
     });
@@ -81,7 +89,7 @@ export const useQuizManagement = () => {
         .insert({
           lesson_id: data.lesson_id,
           title: data.title,
-          questions: data.questions,
+          questions: data.questions as any,
           xp_reward: data.xp_reward
         })
         .select()

@@ -221,37 +221,34 @@ export const useAssignmentManagement = () => {
 
       // If assignment is passed (grade >= 70), award XP
       if (grade >= 70) {
-        const { data: submission } = await supabase
-          .from('assignment_submissions')
-          .select(`
-            assignment_id,
-            user_id,
-            assignments!inner(xp_reward, lesson_id)
-          `)
-          .eq('id', submissionId)
+        // Get assignment details for XP reward
+        const { data: assignment } = await supabase
+          .from('assignments')
+          .select('xp_reward, lesson_id')
+          .eq('id', data.assignment_id)
           .single();
 
-        if (submission) {
-          // Award XP
-          await supabase
-            .from('user_xp')
-            .insert({
-              user_id: submission.user_id,
-              amount: submission.assignments.xp_reward,
-              source: 'assignment',
-              source_id: submission.assignment_id
-            });
+        if (!assignment) return data;
 
-          // Mark lesson as complete
-          await supabase
-            .from('user_progress')
-            .upsert({
-              user_id: submission.user_id,
-              lesson_id: submission.assignments.lesson_id,
-              completed: true,
-              completed_at: new Date().toISOString()
-            });
-        }
+        // Award XP
+        await supabase
+          .from('user_xp')
+          .insert({
+            user_id: data.user_id,
+            amount: assignment.xp_reward,
+            source: 'assignment',
+            source_id: data.assignment_id
+          });
+
+        // Mark lesson as complete
+        await supabase
+          .from('user_progress')
+          .upsert({
+            user_id: data.user_id,
+            lesson_id: assignment.lesson_id,
+            completed: true,
+            completed_at: new Date().toISOString()
+          });
       }
 
       return data;
