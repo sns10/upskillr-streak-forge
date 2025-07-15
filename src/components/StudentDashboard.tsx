@@ -1,15 +1,13 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LogOut, User, Settings } from 'lucide-react';
+import { LogOut, User, Settings, Award } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import StudentStats from './StudentStats';
 import CourseList from './CourseList';
 import BadgeDisplay from './BadgeDisplay';
 import AchievementNotification from './AchievementNotification';
 import { useBadgeSystem } from '@/hooks/useBadgeSystem';
-import { Button } from '@/components/ui/button';
-import { Award } from 'lucide-react';
 import { useState } from 'react';
 import React from 'react';
 

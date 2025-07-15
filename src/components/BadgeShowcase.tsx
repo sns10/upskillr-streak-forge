@@ -5,7 +5,7 @@ import BadgeDisplay from './BadgeDisplay';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { Award, Lock } from 'lucide-react';
+import { Award, Lock, Trophy } from 'lucide-react';
 
 interface BadgeWithEarned {
   id: string;
