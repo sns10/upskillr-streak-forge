@@ -5,6 +5,13 @@ import { LogOut, User, Settings } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import StudentStats from './StudentStats';
 import CourseList from './CourseList';
+import BadgeDisplay from './BadgeDisplay';
+import AchievementNotification from './AchievementNotification';
+import { useBadgeSystem } from '@/hooks/useBadgeSystem';
+import { Button } from '@/components/ui/button';
+import { Award } from 'lucide-react';
+import { useState } from 'react';
+import React from 'react';
 
 interface StudentDashboardProps {
   onLogout: () => void;
@@ -12,6 +19,18 @@ interface StudentDashboardProps {
 
 const StudentDashboard = ({ onLogout }: StudentDashboardProps) => {
   const { user } = useAuth();
+  const { 
+    userBadges, 
+    checkForNewBadges, 
+    currentAchievement, 
+    dismissAchievement 
+  } = useBadgeSystem();
+  const [showBadgeModal, setShowBadgeModal] = useState(false);
+
+  // Check for new badges when component mounts
+  React.useEffect(() => {
+    checkForNewBadges();
+  }, [checkForNewBadges]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -40,6 +59,40 @@ const StudentDashboard = ({ onLogout }: StudentDashboardProps) => {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Stats Overview */}
         <StudentStats />
+
+        {/* Recent Badges */}
+        {userBadges.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Recent Badges</h2>
+                <p className="text-gray-600">Your latest achievements</p>
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowBadgeModal(true)}
+                className="flex items-center gap-2"
+              >
+                <Award className="w-4 h-4" />
+                View All Badges
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {userBadges.slice(0, 6).map((userBadge) => (
+                <BadgeDisplay
+                  key={userBadge.id}
+                  badge={{
+                    ...userBadge.badge,
+                    earned_at: userBadge.earned_at
+                  }}
+                  earned={true}
+                  size="sm"
+                  showDescription={false}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Main Content */}
         <div className="space-y-8">
@@ -72,6 +125,12 @@ const StudentDashboard = ({ onLogout }: StudentDashboardProps) => {
           </section>
         </div>
       </main>
+
+      {/* Achievement Notification */}
+      <AchievementNotification
+        achievement={currentAchievement}
+        onDismiss={dismissAchievement}
+      />
     </div>
   );
 };
