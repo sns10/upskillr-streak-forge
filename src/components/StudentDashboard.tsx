@@ -1,4 +1,3 @@
-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LogOut, User, Settings, Award } from 'lucide-react';
@@ -8,8 +7,8 @@ import CourseList from './CourseList';
 import BadgeDisplay from './BadgeDisplay';
 import AchievementNotification from './AchievementNotification';
 import { useBadgeSystem } from '@/hooks/useBadgeSystem';
-import { useState } from 'react';
-import React from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface StudentDashboardProps {
   onLogout: () => void;
@@ -17,6 +16,7 @@ interface StudentDashboardProps {
 
 const StudentDashboard = ({ onLogout }: StudentDashboardProps) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { 
     userBadges, 
     checkForNewBadges, 
@@ -26,7 +26,7 @@ const StudentDashboard = ({ onLogout }: StudentDashboardProps) => {
   const [showBadgeModal, setShowBadgeModal] = useState(false);
 
   // Check for new badges when component mounts
-  React.useEffect(() => {
+  useEffect(() => {
     checkForNewBadges();
   }, [checkForNewBadges]);
 
@@ -60,7 +60,7 @@ const StudentDashboard = ({ onLogout }: StudentDashboardProps) => {
 
         {/* Recent Badges */}
         {userBadges.length > 0 && (
-          <section>
+          <section className="mb-8">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Recent Badges</h2>
@@ -68,7 +68,7 @@ const StudentDashboard = ({ onLogout }: StudentDashboardProps) => {
               </div>
               <Button 
                 variant="outline" 
-                onClick={() => setShowBadgeModal(true)}
+                onClick={() => navigate('/badges')}
                 className="flex items-center gap-2"
               >
                 <Award className="w-4 h-4" />

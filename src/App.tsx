@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import AdminSetup from "./pages/AdminSetup";
 import CourseDetail from "./pages/CourseDetail";
 import LessonPlayer from "./pages/LessonPlayer";
+import BadgeCollection from "./pages/BadgeCollection";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="/admin-setup" element={<AdminSetup />} />
             <Route path="/course/:courseId" element={<CourseDetail />} />
             <Route path="/lesson/:lessonId" element={<LessonPlayer />} />
+            <Route path="/badges" element={<BadgeCollection />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
