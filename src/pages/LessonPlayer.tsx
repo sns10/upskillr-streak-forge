@@ -70,6 +70,7 @@ const LessonPlayer = () => {
   const playerRef = useRef<any>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const xpAwardedRef = useRef<boolean>(false);
   
   // Quiz and Assignment hooks
   const { useQuizByLesson, useQuizResults, submitQuizMutation } = useQuizManagement();
@@ -425,13 +426,14 @@ const LessonPlayer = () => {
           setWatchPercentage(percentage);
 
           // Mark as completed if watched >80% and not already completed
-          if (percentage > 80 && !isCompleted && progress && !progress.completed && !hasReceivedXP) {
+          if (percentage > 80 && !isCompleted && progress && !progress.completed && !hasReceivedXP && !xpAwardedRef.current) {
             setIsCompleted(true);
             updateProgressMutation.mutate({ watchPercentage: percentage, completed: true });
             
-            // Only award XP if not already received
-            if (!xpRecord && !hasReceivedXP) {
+            // Only award XP if not already received and not currently being awarded
+            if (!xpRecord && !hasReceivedXP && !xpAwardedRef.current) {
               console.log('Awarding XP for lesson completion:', lesson.xp_reward);
+              xpAwardedRef.current = true; // Immediately prevent duplicate awards
               setHasReceivedXP(true);
               awardXPMutation.mutate();
             } else {
@@ -584,6 +586,9 @@ const LessonPlayer = () => {
     // Set XP state based on existing record
     if (xpRecord) {
       setHasReceivedXP(true);
+      xpAwardedRef.current = true;
+    } else {
+      xpAwardedRef.current = false;
     }
   }, [progress, xpRecord]);
 
