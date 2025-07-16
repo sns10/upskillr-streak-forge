@@ -6,6 +6,7 @@ import StudentStats from './StudentStats';
 import CourseList from './CourseList';
 import BadgeDisplay from './BadgeDisplay';
 import AchievementNotification from './AchievementNotification';
+import LeaderboardCard from './LeaderboardCard';
 import { useBadgeSystem } from '@/hooks/useBadgeSystem';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -93,34 +94,41 @@ const StudentDashboard = ({ onLogout }: StudentDashboardProps) => {
         )}
 
         {/* Main Content */}
-        <div className="space-y-8">
-          {/* Available Courses */}
-          <section>
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Available Courses</h2>
-                <p className="text-gray-600">Continue your learning journey</p>
-              </div>
-            </div>
-            <CourseList />
-          </section>
-
-          {/* Recent Activity */}
-          <section>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Activity</h2>
-            <Card>
-              <CardHeader>
-                <CardTitle>Activity Feed</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12">
-                  <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Recent Activity</h3>
-                  <p className="text-gray-600">Start learning to see your progress here.</p>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <div className="lg:col-span-3 space-y-8">
+            {/* Available Courses */}
+            <section>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Available Courses</h2>
+                  <p className="text-gray-600">Continue your learning journey</p>
                 </div>
-              </CardContent>
-            </Card>
-          </section>
+              </div>
+              <CourseList />
+            </section>
+
+            {/* Recent Activity */}
+            <section>
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Activity</h2>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Activity Feed</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-12">
+                    <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">No Recent Activity</h3>
+                    <p className="text-gray-600">Start learning to see your progress here.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+          </div>
+
+          {/* Right Sidebar */}
+          <div className="space-y-6">
+            <LeaderboardCard />
+          </div>
         </div>
       </main>
 

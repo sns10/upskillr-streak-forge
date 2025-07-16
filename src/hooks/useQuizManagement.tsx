@@ -170,17 +170,50 @@ export const useQuizManagement = () => {
 
         if (progressError) throw progressError;
 
-        // Update streak
-        const { error: streakError } = await supabase
+        // Update streak properly
+        const today = new Date().toISOString().split('T')[0];
+        
+        const { data: currentStreak } = await supabase
           .from('streaks')
-          .upsert({
-            user_id: user.id,
-            last_activity_date: new Date().toISOString().split('T')[0],
-            current_streak: 1,
-            longest_streak: 1
-          });
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
 
-        if (streakError) console.warn('Streak update failed:', streakError);
+        if (currentStreak) {
+          const lastActivityDate = currentStreak.last_activity_date;
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+          let newStreakCount = currentStreak.current_streak;
+
+          if (lastActivityDate === yesterdayStr) {
+            // Continuing streak
+            newStreakCount += 1;
+          } else if (lastActivityDate !== today) {
+            // Starting new streak or broken streak
+            newStreakCount = 1;
+          }
+
+          const { error: streakError } = await supabase
+            .from('streaks')
+            .update({
+              current_streak: newStreakCount,
+              longest_streak: Math.max(newStreakCount, currentStreak.longest_streak),
+              last_activity_date: today,
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', user.id);
+
+          if (streakError) console.warn('Streak update failed:', streakError);
+        }
+
+        // Check for new badges
+        try {
+          await supabase.rpc('check_and_award_badges', { user_uuid: user.id });
+        } catch (badgeError) {
+          console.warn('Badge check failed:', badgeError);
+        }
       }
 
       return result;

@@ -68,44 +68,47 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       if (xpError) throw xpError;
       if (!xpData || !xpData.length) return [];
 
-      // Group by user_id and sum XP
+      // Calculate total XP per user
       const userXpTotals: Record<string, number> = {};
-      xpData.forEach(xp => {
-        userXpTotals[xp.user_id] = (userXpTotals[xp.user_id] || 0) + xp.amount;
+      xpData.forEach(record => {
+        userXpTotals[record.user_id] = (userXpTotals[record.user_id] || 0) + record.amount;
       });
 
-      // Get top 10 users by total XP
+      // Get top 10 users by XP
       const topUsers = Object.entries(userXpTotals)
         .sort(([, a], [, b]) => b - a)
         .slice(0, 10);
 
       if (!topUsers.length) return [];
 
-      // Get profiles and streaks for top users
-      const leaderboardData = [];
-      for (const [userId, totalXP] of topUsers) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
+      // Get profiles and streaks for top users in parallel
+      const leaderboardPromises = topUsers.map(async ([userId, totalXP]) => {
+        const [profileResult, streakResult] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single(),
+          supabase
+            .from('streaks')
+            .select('current_streak, longest_streak')
+            .eq('user_id', userId)
+            .single()
+        ]);
 
-        const { data: streak } = await supabase
-          .from('streaks')
-          .select('current_streak')
-          .eq('user_id', userId)
-          .single();
-
-        if (profile) {
-          leaderboardData.push({
-            ...profile,
+        if (profileResult.data) {
+          return {
+            ...profileResult.data,
             totalXP,
-            current_streak: streak?.current_streak || 0
-          });
+            current_streak: streakResult.data?.current_streak || 0,
+            longest_streak: streakResult.data?.longest_streak || 0
+          };
         }
-      }
+        return null;
+      });
 
-      return leaderboardData;
+      const leaderboardData = await Promise.all(leaderboardPromises);
+      return leaderboardData.filter(Boolean);
     }
   });
 

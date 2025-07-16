@@ -155,18 +155,27 @@ export const useAssignmentManagement = () => {
         const fileExt = data.file.name.split('.').pop();
         const filePath = `${user.id}/${data.assignment_id}/${Date.now()}.${fileExt}`;
 
-        const { error: uploadError, data: uploadData } = await supabase.storage
-          .from('assignment-files')
-          .upload(filePath, data.file);
+        try {
+          const { error: uploadError } = await supabase.storage
+            .from('assignment-files')
+            .upload(filePath, data.file);
 
-        if (uploadError) throw uploadError;
+          if (uploadError) {
+            console.error('File upload error:', uploadError);
+            throw new Error(`File upload failed: ${uploadError.message}`);
+          }
 
-        const { data: urlData } = supabase.storage
-          .from('assignment-files')
-          .getPublicUrl(filePath);
+          // Get the public URL for the uploaded file
+          const { data: urlData } = supabase.storage
+            .from('assignment-files')
+            .getPublicUrl(filePath);
 
-        fileUrl = urlData.publicUrl;
-        fileName = data.file.name;
+          fileUrl = urlData.publicUrl;
+          fileName = data.file.name;
+        } catch (error) {
+          console.error('Storage operation failed:', error);
+          throw error;
+        }
       }
 
       // Submit assignment
@@ -249,6 +258,13 @@ export const useAssignmentManagement = () => {
             completed: true,
             completed_at: new Date().toISOString()
           });
+
+        // Check for new badges
+        try {
+          await supabase.rpc('check_and_award_badges', { user_uuid: data.user_id });
+        } catch (badgeError) {
+          console.warn('Badge check failed:', badgeError);
+        }
       }
 
       return data;

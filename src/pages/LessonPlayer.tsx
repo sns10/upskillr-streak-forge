@@ -269,6 +269,18 @@ const LessonPlayer = () => {
             updateProgressMutation.mutate({ watchPercentage: percentage, completed: true });
             awardXPMutation.mutate();
             updateStreakMutation.mutate();
+            
+            // Check for new badges
+            if (user) {
+              (async () => {
+                try {
+                  await supabase.rpc('check_and_award_badges', { user_uuid: user.id });
+                  console.log('Badge check completed');
+                } catch (error) {
+                  console.warn('Badge check failed:', error);
+                }
+              })();
+            }
           } else if (user && !isCompleted) {
             // Update progress every 10% milestone
             if (percentage % 10 === 0 && percentage !== watchPercentage) {
