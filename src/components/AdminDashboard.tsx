@@ -96,16 +96,22 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { data: students = [] } = useQuery({
     queryKey: ['admin-students'],
     queryFn: async () => {
-      // First get all students from profiles by joining with user_roles
+      // First get student user IDs from user_roles
+      const { data: studentRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'student');
+
+      if (rolesError) throw rolesError;
+      if (!studentRoles || studentRoles.length === 0) return [];
+
+      const studentIds = studentRoles.map(r => r.user_id);
+
+      // Then get all students from profiles
       const { data: allStudents, error: studentsError } = await supabase
         .from('profiles')
-        .select(`
-          id, 
-          full_name, 
-          avatar_url,
-          user_roles!inner(role)
-        `)
-        .eq('user_roles.role', 'student');
+        .select('id, full_name, avatar_url')
+        .in('id', studentIds);
 
       if (studentsError) throw studentsError;
 
