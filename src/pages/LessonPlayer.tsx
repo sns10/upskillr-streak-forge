@@ -425,12 +425,12 @@ const LessonPlayer = () => {
           setWatchPercentage(percentage);
 
           // Mark as completed if watched >80% and not already completed
-          if (percentage > 80 && !isCompleted && progress && !progress.completed) {
+          if (percentage > 80 && !isCompleted && progress && !progress.completed && !hasReceivedXP) {
             setIsCompleted(true);
             updateProgressMutation.mutate({ watchPercentage: percentage, completed: true });
             
             // Only award XP if not already received
-            if (!xpRecord) {
+            if (!xpRecord && !hasReceivedXP) {
               console.log('Awarding XP for lesson completion:', lesson.xp_reward);
               setHasReceivedXP(true);
               awardXPMutation.mutate();
@@ -536,10 +536,28 @@ const LessonPlayer = () => {
     if (!isFullscreen) {
       if (element.requestFullscreen) {
         element.requestFullscreen();
+        // Force landscape orientation on mobile devices
+        if ('screen' in window && 'orientation' in screen) {
+          try {
+            (screen.orientation as any).lock('landscape').catch(() => {
+              // Orientation lock failed, continue anyway
+            });
+          } catch (error) {
+            // Orientation API not supported
+          }
+        }
       }
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen();
+        // Unlock orientation when exiting fullscreen
+        if ('screen' in window && 'orientation' in screen) {
+          try {
+            (screen.orientation as any).unlock();
+          } catch (error) {
+            // Orientation API not supported
+          }
+        }
       }
     }
   };
@@ -685,7 +703,11 @@ const LessonPlayer = () => {
               <div className="space-y-4">
                 <div 
                   id="video-container"
-                  className="relative bg-black rounded-lg overflow-hidden group cursor-pointer"
+                  className={`relative bg-black overflow-hidden group cursor-pointer transition-all duration-300 ${
+                    isFullscreen 
+                      ? 'fixed inset-0 z-50 rounded-none' 
+                      : 'rounded-lg'
+                  }`}
                   onMouseMove={() => {
                     setShowControls(true);
                     if (isPlaying) hideControlsAfterDelay();
