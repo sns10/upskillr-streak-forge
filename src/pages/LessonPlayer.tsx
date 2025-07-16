@@ -56,6 +56,7 @@ const LessonPlayer = () => {
   const queryClient = useQueryClient();
   const [watchPercentage, setWatchPercentage] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [hasReceivedXP, setHasReceivedXP] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(50);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -176,6 +177,26 @@ const LessonPlayer = () => {
     enabled: !!user && !!lessonId
   });
 
+  // Check if user has already received XP for this lesson
+  const { data: xpRecord } = useQuery({
+    queryKey: ['lesson-xp', lessonId, user?.id],
+    queryFn: async () => {
+      if (!user || !lessonId) return null;
+
+      const { data, error } = await supabase
+        .from('user_xp')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('source', 'lesson_completion')
+        .eq('source_id', lessonId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user && !!lessonId
+  });
+
   // Get next/previous lessons for navigation
   const getNavigationLessons = () => {
     if (!courseWithProgress || !lessonId) return { nextLesson: null, previousLesson: null };
@@ -222,6 +243,7 @@ const LessonPlayer = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lesson-progress', lessonId, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['course-progress'] });
       queryClient.invalidateQueries({ queryKey: ['user-xp', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['course-detail'] });
     }
@@ -248,6 +270,7 @@ const LessonPlayer = () => {
         description: `You earned ${lesson?.xp_reward} XP!`,
       });
       queryClient.invalidateQueries({ queryKey: ['user-xp', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['lesson-xp', lessonId, user?.id] });
     }
   });
 
@@ -403,7 +426,13 @@ const LessonPlayer = () => {
           if (percentage > 80 && !isCompleted && progress && !progress.completed) {
             setIsCompleted(true);
             updateProgressMutation.mutate({ watchPercentage: percentage, completed: true });
-            awardXPMutation.mutate();
+            
+            // Only award XP if not already received
+            if (!xpRecord && !hasReceivedXP) {
+              setHasReceivedXP(true);
+              awardXPMutation.mutate();
+            }
+            
             updateStreakMutation.mutate();
             
             // Check for new badges
@@ -528,7 +557,12 @@ const LessonPlayer = () => {
       setWatchPercentage(progress.watch_percentage || 0);
       setIsCompleted(progress.completed || false);
     }
-  }, [progress]);
+    
+    // Set XP state based on existing record
+    if (xpRecord) {
+      setHasReceivedXP(true);
+    }
+  }, [progress, xpRecord]);
 
   if (isLoading) {
     return (
