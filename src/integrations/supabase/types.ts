@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      adaptive_quiz_sessions: {
+        Row: {
+          completed_at: string | null
+          consecutive_correct: number | null
+          consecutive_incorrect: number | null
+          current_difficulty: string
+          id: string
+          is_active: boolean
+          questions_correct: number | null
+          questions_total: number | null
+          quiz_id: string
+          session_data: Json | null
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          consecutive_correct?: number | null
+          consecutive_incorrect?: number | null
+          current_difficulty?: string
+          id?: string
+          is_active?: boolean
+          questions_correct?: number | null
+          questions_total?: number | null
+          quiz_id: string
+          session_data?: Json | null
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          consecutive_correct?: number | null
+          consecutive_incorrect?: number | null
+          current_difficulty?: string
+          id?: string
+          is_active?: boolean
+          questions_correct?: number | null
+          questions_total?: number | null
+          quiz_id?: string
+          session_data?: Json | null
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       assignment_submissions: {
         Row: {
           assignment_id: string
@@ -158,6 +203,39 @@ export type Database = {
         }
         Relationships: []
       }
+      learning_profiles: {
+        Row: {
+          created_at: string
+          id: string
+          knowledge_retention_rate: number | null
+          learning_speed: number | null
+          preferred_difficulty: string | null
+          response_time_avg: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          knowledge_retention_rate?: number | null
+          learning_speed?: number | null
+          preferred_difficulty?: string | null
+          response_time_avg?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          knowledge_retention_rate?: number | null
+          learning_speed?: number | null
+          preferred_difficulty?: string | null
+          response_time_avg?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       lessons: {
         Row: {
           content_url: string | null
@@ -257,6 +335,45 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      question_analytics: {
+        Row: {
+          avg_response_time: number | null
+          created_at: string
+          difficulty_level: string
+          id: string
+          question_index: number
+          quiz_id: string
+          success_rate: number | null
+          times_correct: number | null
+          times_shown: number | null
+          updated_at: string
+        }
+        Insert: {
+          avg_response_time?: number | null
+          created_at?: string
+          difficulty_level?: string
+          id?: string
+          question_index: number
+          quiz_id: string
+          success_rate?: number | null
+          times_correct?: number | null
+          times_shown?: number | null
+          updated_at?: string
+        }
+        Update: {
+          avg_response_time?: number | null
+          created_at?: string
+          difficulty_level?: string
+          id?: string
+          question_index?: number
+          quiz_id?: string
+          success_rate?: number | null
+          times_correct?: number | null
+          times_shown?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -420,6 +537,42 @@ export type Database = {
           },
         ]
       }
+      user_question_performance: {
+        Row: {
+          confidence_level: number | null
+          created_at: string
+          difficulty_at_time: string
+          id: string
+          is_correct: boolean
+          question_index: number
+          quiz_id: string
+          response_time: number | null
+          user_id: string
+        }
+        Insert: {
+          confidence_level?: number | null
+          created_at?: string
+          difficulty_at_time: string
+          id?: string
+          is_correct: boolean
+          question_index: number
+          quiz_id: string
+          response_time?: number | null
+          user_id: string
+        }
+        Update: {
+          confidence_level?: number | null
+          created_at?: string
+          difficulty_at_time?: string
+          id?: string
+          is_correct?: boolean
+          question_index?: number
+          quiz_id?: string
+          response_time?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -477,6 +630,10 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: undefined
       }
+      get_adaptive_difficulty: {
+        Args: { user_uuid: string; quiz_session_id: string }
+        Returns: string
+      }
       get_current_user_role: {
         Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["app_role"]
@@ -484,6 +641,10 @@ export type Database = {
       get_user_role: {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      update_learning_profile: {
+        Args: { user_uuid: string; quiz_session_id: string }
+        Returns: undefined
       }
     }
     Enums: {

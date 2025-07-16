@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { ArrowLeft, Trophy, CheckCircle, Play, Award, Volume2, Settings, SkipForward, Pause, PlayIcon, Maximize, Minimize } from 'lucide-react';
+import { ArrowLeft, Trophy, CheckCircle, Play, Award, Volume2, Settings, SkipForward, Pause, PlayIcon, Maximize, Minimize, Brain } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import QuizPlayer from '@/components/QuizPlayer';
+import AdaptiveQuizPlayer from '@/components/AdaptiveQuizPlayer';
 import AssignmentPlayer from '@/components/AssignmentPlayer';
 import { useQuizManagement } from '@/hooks/useQuizManagement';
 import { useAssignmentManagement } from '@/hooks/useAssignmentManagement';
@@ -49,6 +50,7 @@ const LessonPlayer = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [autoplayNext, setAutoplayNext] = useState(false);
+  const [useAdaptiveQuiz, setUseAdaptiveQuiz] = useState(true);
   const playerRef = useRef<any>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -690,6 +692,32 @@ const LessonPlayer = () => {
             {/* Quiz Lesson */}
             {lesson.type === 'quiz' && quiz && (
               <div className="mb-6">
+                {/* Quiz Mode Selector */}
+                <div className="flex items-center justify-between mb-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-5 h-5 text-blue-600" />
+                    <span className="font-medium text-gray-700">Quiz Mode:</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={useAdaptiveQuiz ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setUseAdaptiveQuiz(true)}
+                      className="text-sm"
+                    >
+                      🧠 Adaptive
+                    </Button>
+                    <Button
+                      variant={!useAdaptiveQuiz ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setUseAdaptiveQuiz(false)}
+                      className="text-sm"
+                    >
+                      📝 Standard
+                    </Button>
+                  </div>
+                </div>
+
                 {quizResults && quizResults.score >= 70 ? (
                   <div className="text-center py-12 border-green-200 bg-green-50 rounded-lg border">
                     <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
@@ -705,6 +733,18 @@ const LessonPlayer = () => {
                       Retake Quiz
                     </Button>
                   </div>
+                ) : useAdaptiveQuiz ? (
+                  <AdaptiveQuizPlayer 
+                    quiz={quiz} 
+                    onComplete={(score, answers) => {
+                      submitQuizMutation.mutate({
+                        quiz_id: quiz.id,
+                        score,
+                        answers,
+                        completed_at: new Date().toISOString()
+                      });
+                    }}
+                  />
                 ) : (
                   <QuizPlayer 
                     quiz={quiz} 
