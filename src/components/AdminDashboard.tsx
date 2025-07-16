@@ -114,6 +114,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         .in('id', studentIds);
 
       if (studentsError) throw studentsError;
+      if (!allStudents || allStudents.length === 0) return [];
 
       // Then get detailed analytics for each student
       const studentsWithAnalytics = await Promise.all(

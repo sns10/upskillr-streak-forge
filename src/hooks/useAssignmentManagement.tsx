@@ -103,16 +103,18 @@ export const useAssignmentManagement = () => {
     return useQuery({
       queryKey: ['assignment', lessonId],
       queryFn: async () => {
+        if (!lessonId || lessonId === 'temp') return null;
+        
         const { data, error } = await supabase
           .from('assignments')
           .select('*')
           .eq('lesson_id', lessonId)
-          .single();
+          .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') throw error;
+        if (error) throw error;
         return data as Assignment | null;
       },
-      enabled: !!lessonId
+      enabled: !!lessonId && lessonId !== 'temp'
     });
   };
 
