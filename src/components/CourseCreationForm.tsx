@@ -158,9 +158,12 @@ const CourseCreationForm = ({ onClose }: CourseCreationFormProps) => {
           }
 
           if (lessonData.type === 'assignment' && (lessonData as any).assignmentData) {
+            const assignmentData = { ...(lessonData as any).assignmentData };
+            // Remove lesson_id if it's "temp" and use the actual lesson id
+            delete assignmentData.lesson_id;
             await createAssignmentMutation.mutateAsync({
               lesson_id: lesson.id,
-              ...(lessonData as any).assignmentData
+              ...assignmentData
             });
           }
         }
