@@ -17,6 +17,23 @@ interface UpdateCourseData {
   thumbnail_url?: string;
 }
 
+interface UpdateModuleData {
+  id: string;
+  title?: string;
+  description?: string;
+  order_index?: number;
+}
+
+interface UpdateLessonData {
+  id: string;
+  title?: string;
+  description?: string;
+  type?: 'video' | 'quiz' | 'assignment';
+  content_url?: string;
+  xp_reward?: number;
+  order_index?: number;
+}
+
 interface CreateModuleData {
   course_id: string;
   title: string;
@@ -266,12 +283,74 @@ export const useCourseManagement = () => {
     }
   });
 
+  const updateModuleMutation = useMutation({
+    mutationFn: async ({ id, ...data }: UpdateModuleData) => {
+      const { data: module, error } = await supabase
+        .from('modules')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return module;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Module Updated",
+        description: "Module has been updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+      queryClient.invalidateQueries({ queryKey: ['course-detail'] });
+    },
+    onError: (error) => {
+      console.error('Module update error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update module: " + error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  const updateLessonMutation = useMutation({
+    mutationFn: async ({ id, ...data }: UpdateLessonData) => {
+      const { data: lesson, error } = await supabase
+        .from('lessons')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return lesson;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Lesson Updated",
+        description: "Lesson has been updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+      queryClient.invalidateQueries({ queryKey: ['course-detail'] });
+    },
+    onError: (error) => {
+      console.error('Lesson update error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update lesson: " + error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
   return {
     createCourseMutation,
     createModuleMutation,
     createLessonMutation,
     publishCourseMutation,
     updateCourseMutation,
+    updateModuleMutation,
+    updateLessonMutation,
     deleteCourseMutation,
     deleteModuleMutation,
     deleteLessonMutation,

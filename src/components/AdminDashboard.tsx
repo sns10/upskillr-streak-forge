@@ -31,6 +31,8 @@ import { useAdminStats } from '@/hooks/useAdminStats';
 import { useCourseManagement } from '@/hooks/useCourseManagement';
 import CourseCreationForm from './CourseCreationForm';
 import CourseEditModal from './CourseEditModal';
+import ModuleEditModal from './ModuleEditModal';
+import LessonEditModal from './LessonEditModal';
 import DeleteConfirmation from './DeleteConfirmation';
 
 interface AdminDashboardProps {
@@ -41,6 +43,8 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateCourse, setShowCreateCourse] = useState(false);
   const [editingCourse, setEditingCourse] = useState<any>(null);
+  const [editingModule, setEditingModule] = useState<any>(null);
+  const [editingLesson, setEditingLesson] = useState<any>(null);
   const [deletingItem, setDeletingItem] = useState<{type: 'course' | 'module' | 'lesson', id: string, name: string} | null>(null);
   
   const { data: stats, isLoading: statsLoading } = useAdminStats();
@@ -59,8 +63,8 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
         .select(`
           *,
           modules (
-            id,
-            lessons (id)
+            *,
+            lessons (*)
           )
         `)
         .order('created_at', { ascending: false });
@@ -139,6 +143,22 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
   const handleDeleteCourse = (course: any) => {
     setDeletingItem({ type: 'course', id: course.id, name: course.title });
+  };
+
+  const handleEditModule = (module: any) => {
+    setEditingModule(module);
+  };
+
+  const handleDeleteModule = (module: any) => {
+    setDeletingItem({ type: 'module', id: module.id, name: module.title });
+  };
+
+  const handleEditLesson = (lesson: any) => {
+    setEditingLesson(lesson);
+  };
+
+  const handleDeleteLesson = (lesson: any) => {
+    setDeletingItem({ type: 'lesson', id: lesson.id, name: lesson.title });
   };
 
   const handleConfirmDelete = () => {
@@ -360,6 +380,77 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                           </Badge>
                         )}
                       </div>
+                      
+                      {/* Modules and Lessons */}
+                      {course.modules && course.modules.length > 0 && (
+                        <div className="mt-6 space-y-4">
+                          <h4 className="font-medium text-gray-900">Modules</h4>
+                          {course.modules.map((module: any) => (
+                            <div key={module.id} className="border border-gray-200 rounded-lg p-4">
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <h5 className="font-medium">{module.title}</h5>
+                                  <p className="text-sm text-gray-600">{module.description}</p>
+                                  <p className="text-xs text-gray-500">Order: {module.order_index}</p>
+                                </div>
+                                <div className="flex space-x-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEditModule(module)}
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDeleteModule(module)}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                              
+                              {module.lessons && module.lessons.length > 0 && (
+                                <div className="mt-3 ml-4 space-y-2">
+                                  <h6 className="text-sm font-medium text-gray-800">Lessons</h6>
+                                  {module.lessons.map((lesson: any) => (
+                                    <div key={lesson.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                                      <div>
+                                        <span className="text-sm font-medium">{lesson.title}</span>
+                                        <Badge variant="outline" className="ml-2 text-xs">
+                                          {lesson.type}
+                                        </Badge>
+                                        <span className="text-xs text-gray-500 ml-2">
+                                          Order: {lesson.order_index} • {lesson.xp_reward} XP
+                                        </span>
+                                      </div>
+                                      <div className="flex space-x-1">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleEditLesson(lesson)}
+                                        >
+                                          <Edit className="w-3 h-3" />
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleDeleteLesson(lesson)}
+                                          className="text-red-600 hover:text-red-700"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))
@@ -420,6 +511,24 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
           course={editingCourse}
           isOpen={!!editingCourse}
           onClose={() => setEditingCourse(null)}
+        />
+      )}
+
+      {/* Module Edit Modal */}
+      {editingModule && (
+        <ModuleEditModal
+          module={editingModule}
+          isOpen={!!editingModule}
+          onClose={() => setEditingModule(null)}
+        />
+      )}
+
+      {/* Lesson Edit Modal */}
+      {editingLesson && (
+        <LessonEditModal
+          lesson={editingLesson}
+          isOpen={!!editingLesson}
+          onClose={() => setEditingLesson(null)}
         />
       )}
 
