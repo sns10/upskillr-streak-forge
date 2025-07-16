@@ -430,9 +430,12 @@ const LessonPlayer = () => {
             updateProgressMutation.mutate({ watchPercentage: percentage, completed: true });
             
             // Only award XP if not already received
-            if (!xpRecord && !hasReceivedXP) {
+            if (!xpRecord) {
+              console.log('Awarding XP for lesson completion:', lesson.xp_reward);
               setHasReceivedXP(true);
               awardXPMutation.mutate();
+            } else {
+              console.log('XP already awarded for this lesson');
             }
             
             updateStreakMutation.mutate();
@@ -608,16 +611,17 @@ const LessonPlayer = () => {
       )}
 
       <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-80' : 'ml-0'}`}>
-        <div className="max-w-4xl mx-auto p-6">
+        <div className="max-w-4xl mx-auto p-3 sm:p-6">
           {/* Header with Breadcrumbs */}
           <div className="mb-6">
             <BreadcrumbNavigation items={breadcrumbItems} className="mb-4" />
             
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
               <Link to={`/course/${lesson.module.course.id}`}>
-                <Button variant="ghost">
+                <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Course
+                  <span className="hidden sm:inline">Back to Course</span>
+                  <span className="sm:hidden">Back</span>
                 </Button>
               </Link>
 
@@ -626,28 +630,28 @@ const LessonPlayer = () => {
                 {previousLesson ? (
                   <Link to={`/lesson/${previousLesson.id}`}>
                     <Button variant="outline" size="sm">
-                      <ChevronLeft className="w-4 h-4 mr-1" />
-                      Previous
+                      <ChevronLeft className="w-4 h-4 sm:mr-1" />
+                      <span className="hidden sm:inline">Previous</span>
                     </Button>
                   </Link>
                 ) : (
                   <Button variant="outline" size="sm" disabled>
-                    <ChevronLeft className="w-4 h-4 mr-1" />
-                    Previous
+                    <ChevronLeft className="w-4 h-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Previous</span>
                   </Button>
                 )}
                 
                 {nextLesson ? (
                   <Link to={`/lesson/${nextLesson.id}`}>
                     <Button size="sm">
-                      Next
-                      <ChevronRight className="w-4 h-4 ml-1" />
+                      <span className="hidden sm:inline">Next</span>
+                      <ChevronRight className="w-4 h-4 sm:ml-1" />
                     </Button>
                   </Link>
                 ) : (
                   <Button size="sm" disabled>
-                    Next
-                    <ChevronRight className="w-4 h-4 ml-1" />
+                    <span className="hidden sm:inline">Next</span>
+                    <ChevronRight className="w-4 h-4 sm:ml-1" />
                   </Button>
                 )}
               </div>
@@ -657,15 +661,15 @@ const LessonPlayer = () => {
           {/* Lesson Content */}
           <Card className="bg-white/80 backdrop-blur-md border-white/20 mb-6">
             <CardHeader>
-              <div className="flex items-start justify-between">
+              <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                 <div className="flex-1">
-                  <CardTitle className="text-2xl font-bold mb-2 flex items-center gap-3">
+                  <CardTitle className="text-xl sm:text-2xl font-bold mb-2 flex items-center gap-3 flex-wrap">
                     {lesson.title}
-                    {isCompleted && <CheckCircle className="w-6 h-6 text-green-500" />}
+                    {isCompleted && <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" />}
                   </CardTitle>
-                  <CardDescription className="text-lg">{lesson.description}</CardDescription>
+                  <CardDescription className="text-base sm:text-lg">{lesson.description}</CardDescription>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 flex-shrink-0">
                   <Badge className="flex items-center space-x-1 bg-gradient-to-r from-yellow-500 to-orange-500">
                     <Trophy className="w-3 h-3" />
                     <span>{lesson.xp_reward} XP</span>
@@ -727,69 +731,68 @@ const LessonPlayer = () => {
                         </div>
                       </div>
 
-                      {/* Control Buttons */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={togglePlayPause}
-                            className="text-white hover:bg-white/20"
-                          >
-                            {isPlaying ? <Pause className="w-5 h-5" /> : <PlayIcon className="w-5 h-5" />}
-                          </Button>
-                          
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={skipForward}
-                            className="text-white hover:bg-white/20"
-                          >
-                            <SkipForward className="w-5 h-5" />
-                          </Button>
+                       {/* Control Buttons */}
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center space-x-2 sm:space-x-3">
+                           <Button
+                             variant="ghost"
+                             size="sm"
+                             onClick={togglePlayPause}
+                             className="text-white hover:bg-white/20"
+                           >
+                             {isPlaying ? <Pause className="w-4 h-4 sm:w-5 sm:h-5" /> : <PlayIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                           </Button>
+                           
+                           <Button
+                             variant="ghost"
+                             size="sm"
+                             onClick={skipForward}
+                             className="text-white hover:bg-white/20"
+                           >
+                             <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
+                           </Button>
 
-                          <div className="flex items-center space-x-2">
-                            <Volume2 className="w-4 h-4 text-white" />
-                            <Slider
-                              value={[volume]}
-                              onValueChange={handleVolumeChange}
-                              max={100}
-                              step={1}
-                              className="w-20"
-                            />
-                          </div>
+                           <div className="hidden sm:flex items-center space-x-2">
+                             <Volume2 className="w-4 h-4 text-white" />
+                             <Slider
+                               value={[volume]}
+                               onValueChange={handleVolumeChange}
+                               max={100}
+                               step={1}
+                               className="w-16 sm:w-20"
+                             />
+                             <div className="text-white text-sm">
+                               {volume}%
+                             </div>
+                           </div>
+                         </div>
 
-                          <div className="text-white text-sm">
-                            {volume}%
-                          </div>
-                        </div>
+                         <div className="flex items-center space-x-1 sm:space-x-3">
+                           <Select value={playbackRate.toString()} onValueChange={handlePlaybackRateChange}>
+                             <SelectTrigger className="w-16 sm:w-20 bg-black/40 border-white/30 text-white text-sm">
+                               <SelectValue />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="0.25">0.25x</SelectItem>
+                               <SelectItem value="0.5">0.5x</SelectItem>
+                               <SelectItem value="0.75">0.75x</SelectItem>
+                               <SelectItem value="1">1x</SelectItem>
+                               <SelectItem value="1.25">1.25x</SelectItem>
+                               <SelectItem value="1.5">1.5x</SelectItem>
+                               <SelectItem value="2">2x</SelectItem>
+                             </SelectContent>
+                           </Select>
 
-                        <div className="flex items-center space-x-3">
-                          <Select value={playbackRate.toString()} onValueChange={handlePlaybackRateChange}>
-                            <SelectTrigger className="w-20 bg-black/40 border-white/30 text-white text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="0.25">0.25x</SelectItem>
-                              <SelectItem value="0.5">0.5x</SelectItem>
-                              <SelectItem value="0.75">0.75x</SelectItem>
-                              <SelectItem value="1">1x</SelectItem>
-                              <SelectItem value="1.25">1.25x</SelectItem>
-                              <SelectItem value="1.5">1.5x</SelectItem>
-                              <SelectItem value="2">2x</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={toggleFullscreen}
-                            className="text-white hover:bg-white/20"
-                          >
-                            {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
-                          </Button>
-                        </div>
-                      </div>
+                           <Button
+                             variant="ghost"
+                             size="sm"
+                             onClick={toggleFullscreen}
+                             className="text-white hover:bg-white/20"
+                           >
+                             {isFullscreen ? <Minimize className="w-4 h-4 sm:w-5 sm:h-5" /> : <Maximize className="w-4 h-4 sm:w-5 sm:h-5" />}
+                           </Button>
+                         </div>
+                       </div>
                     </div>
 
                     {/* Settings Panel */}
@@ -806,8 +809,8 @@ const LessonPlayer = () => {
                 </div>
 
                 {/* Video Options */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 bg-gray-50 rounded-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
                     <label className="flex items-center space-x-2 text-sm">
                       <input
                         type="checkbox"
@@ -818,7 +821,7 @@ const LessonPlayer = () => {
                       <span>Autoplay next lesson</span>
                     </label>
                     {nextLesson && autoplayNext && (
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-gray-600 break-words">
                         Next: {nextLesson.title}
                       </span>
                     )}

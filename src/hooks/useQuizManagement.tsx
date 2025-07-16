@@ -334,17 +334,31 @@ export const useQuizManagement = () => {
 
         if (quizError) throw quizError;
 
-        // Award XP
-        const { error: xpError } = await supabase
+        // Check if XP already awarded for this quiz
+        const { data: existingXP } = await supabase
           .from('user_xp')
-          .insert({
-            user_id: user.id,
-            amount: quiz.xp_reward,
-            source: 'quiz',
-            source_id: data.quiz_id
-          });
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('source', 'quiz')
+          .eq('source_id', data.quiz_id)
+          .maybeSingle();
 
-        if (xpError) throw xpError;
+        if (!existingXP) {
+          console.log('Awarding XP for quiz completion:', quiz.xp_reward);
+          // Award XP
+          const { error: xpError } = await supabase
+            .from('user_xp')
+            .insert({
+              user_id: user.id,
+              amount: quiz.xp_reward,
+              source: 'quiz',
+              source_id: data.quiz_id
+            });
+
+          if (xpError) throw xpError;
+        } else {
+          console.log('XP already awarded for this quiz');
+        }
 
         // Mark lesson as complete
         const { error: progressError } = await supabase

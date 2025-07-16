@@ -21,19 +21,19 @@ const BreadcrumbNavigation = ({ items, className = '' }: BreadcrumbNavigationPro
       </Link>
       
       {items.map((item, index) => (
-        <React.Fragment key={index}>
+        <React.Fragment key={`breadcrumb-${index}`}>
           <ChevronRight className="w-4 h-4 text-gray-400" />
           {item.href && !item.isActive ? (
             <Link 
               to={item.href} 
-              className="hover:text-gray-900 transition-colors truncate max-w-[200px]"
+              className="hover:text-gray-900 transition-colors truncate max-w-[100px] sm:max-w-[200px]"
               title={item.label}
             >
               {item.label}
             </Link>
           ) : (
             <span 
-              className={`truncate max-w-[200px] ${item.isActive ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+              className={`truncate max-w-[100px] sm:max-w-[200px] ${item.isActive ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
               title={item.label}
             >
               {item.label}
