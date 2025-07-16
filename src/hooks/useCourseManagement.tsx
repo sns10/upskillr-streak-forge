@@ -10,6 +10,13 @@ interface CreateCourseData {
   thumbnail_url?: string;
 }
 
+interface UpdateCourseData {
+  id: string;
+  title?: string;
+  description?: string;
+  thumbnail_url?: string;
+}
+
 interface CreateModuleData {
   course_id: string;
   title: string;
@@ -177,11 +184,96 @@ export const useCourseManagement = () => {
     }
   });
 
+  const updateCourseMutation = useMutation({
+    mutationFn: async ({ id, ...data }: UpdateCourseData) => {
+      const { data: course, error } = await supabase
+        .from('courses')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return course;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Course Updated",
+        description: "Course has been updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+      queryClient.invalidateQueries({ queryKey: ['course-detail'] });
+    },
+    onError: (error) => {
+      console.error('Course update error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update course: " + error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  const deleteModuleMutation = useMutation({
+    mutationFn: async (moduleId: string) => {
+      const { error } = await supabase
+        .from('modules')
+        .delete()
+        .eq('id', moduleId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Module Deleted",
+        description: "Module has been removed successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+    },
+    onError: (error) => {
+      console.error('Module deletion error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete module: " + error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  const deleteLessonMutation = useMutation({
+    mutationFn: async (lessonId: string) => {
+      const { error } = await supabase
+        .from('lessons')
+        .delete()
+        .eq('id', lessonId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Lesson Deleted",
+        description: "Lesson has been removed successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+    },
+    onError: (error) => {
+      console.error('Lesson deletion error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete lesson: " + error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
   return {
     createCourseMutation,
     createModuleMutation,
     createLessonMutation,
     publishCourseMutation,
+    updateCourseMutation,
     deleteCourseMutation,
+    deleteModuleMutation,
+    deleteLessonMutation,
   };
 };

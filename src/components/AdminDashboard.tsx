@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,11 +18,20 @@ import {
   TrendingUp,
   LogOut,
   CheckCircle,
-  Clock
+  Clock,
+  MoreVertical
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAdminStats } from '@/hooks/useAdminStats';
 import { useCourseManagement } from '@/hooks/useCourseManagement';
 import CourseCreationForm from './CourseCreationForm';
+import CourseEditModal from './CourseEditModal';
+import DeleteConfirmation from './DeleteConfirmation';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -31,8 +40,16 @@ interface AdminDashboardProps {
 const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateCourse, setShowCreateCourse] = useState(false);
+  const [editingCourse, setEditingCourse] = useState<any>(null);
+  const [deletingItem, setDeletingItem] = useState<{type: 'course' | 'module' | 'lesson', id: string, name: string} | null>(null);
+  
   const { data: stats, isLoading: statsLoading } = useAdminStats();
-  const { publishCourseMutation } = useCourseManagement();
+  const { 
+    publishCourseMutation, 
+    deleteCourseMutation, 
+    deleteModuleMutation, 
+    deleteLessonMutation 
+  } = useCourseManagement();
 
   const { data: courses, isLoading: coursesLoading } = useQuery({
     queryKey: ['admin-courses'],
@@ -114,6 +131,36 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
   const handlePublishCourse = (courseId: string) => {
     publishCourseMutation.mutate(courseId);
+  };
+
+  const handleEditCourse = (course: any) => {
+    setEditingCourse(course);
+  };
+
+  const handleDeleteCourse = (course: any) => {
+    setDeletingItem({ type: 'course', id: course.id, name: course.title });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deletingItem) return;
+    
+    switch (deletingItem.type) {
+      case 'course':
+        deleteCourseMutation.mutate(deletingItem.id, {
+          onSuccess: () => setDeletingItem(null)
+        });
+        break;
+      case 'module':
+        deleteModuleMutation.mutate(deletingItem.id, {
+          onSuccess: () => setDeletingItem(null)
+        });
+        break;
+      case 'lesson':
+        deleteLessonMutation.mutate(deletingItem.id, {
+          onSuccess: () => setDeletingItem(null)
+        });
+        break;
+    }
   };
 
   return (
@@ -273,10 +320,27 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
                               Publish
                             </Button>
                           )}
-                          <Button variant="outline" size="sm">
-                            <Edit className="w-4 h-4 mr-1" />
-                            Edit
-                          </Button>
+                          
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuItem onClick={() => handleEditCourse(course)}>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit Course
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteCourse(course)}
+                                className="text-red-600 focus:text-red-600"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete Course
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     </CardHeader>
@@ -348,6 +412,32 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
       {/* Course Creation Modal */}
       {showCreateCourse && (
         <CourseCreationForm onClose={() => setShowCreateCourse(false)} />
+      )}
+
+      {/* Course Edit Modal */}
+      {editingCourse && (
+        <CourseEditModal
+          course={editingCourse}
+          isOpen={!!editingCourse}
+          onClose={() => setEditingCourse(null)}
+        />
+      )}
+
+      {/* Delete Confirmation */}
+      {deletingItem && (
+        <DeleteConfirmation
+          isOpen={!!deletingItem}
+          onClose={() => setDeletingItem(null)}
+          onConfirm={handleConfirmDelete}
+          title={`Delete ${deletingItem.type}`}
+          description={`Are you sure you want to delete this ${deletingItem.type}?`}
+          itemName={deletingItem.name}
+          isDeleting={
+            deleteCourseMutation.isPending || 
+            deleteModuleMutation.isPending || 
+            deleteLessonMutation.isPending
+          }
+        />
       )}
     </div>
   );
