@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,13 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { ArrowLeft, Trophy, CheckCircle, Play, Award, Volume2, Settings, SkipForward, Pause, PlayIcon, Maximize, Minimize, Brain } from 'lucide-react';
+import { ArrowLeft, Trophy, CheckCircle, Play, Award, Volume2, Settings, SkipForward, Pause, PlayIcon, Maximize, Minimize, Brain, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import QuizPlayer from '@/components/QuizPlayer';
 import AdaptiveQuizPlayer from '@/components/AdaptiveQuizPlayer';
 import AssignmentPlayer from '@/components/AssignmentPlayer';
+import CourseNavigation from '@/components/CourseNavigation';
+import BreadcrumbNavigation from '@/components/BreadcrumbNavigation';
 import { useQuizManagement } from '@/hooks/useQuizManagement';
 import { useAssignmentManagement } from '@/hooks/useAssignmentManagement';
 
@@ -27,9 +29,21 @@ interface Lesson {
   module: {
     id: string;
     title: string;
+    order_index: number;
     course: {
       id: string;
       title: string;
+      modules: Array<{
+        id: string;
+        title: string;
+        order_index: number;
+        lessons: Array<{
+          id: string;
+          title: string;
+          order_index: number;
+          type: string;
+        }>;
+      }>;
     };
   };
 }
@@ -51,6 +65,7 @@ const LessonPlayer = () => {
   const [showControls, setShowControls] = useState(true);
   const [autoplayNext, setAutoplayNext] = useState(false);
   const [useAdaptiveQuiz, setUseAdaptiveQuiz] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const playerRef = useRef<any>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -77,9 +92,21 @@ const LessonPlayer = () => {
           module:modules (
             id,
             title,
+            order_index,
             course:courses (
               id,
-              title
+              title,
+              modules (
+                id,
+                title,
+                order_index,
+                lessons (
+                  id,
+                  title,
+                  order_index,
+                  type
+                )
+              )
             )
           )
         `)
@@ -91,6 +118,45 @@ const LessonPlayer = () => {
     },
     enabled: !!lessonId
   });
+
+  // Fetch user progress for the entire course
+  const { data: courseProgress } = useQuery({
+    queryKey: ['course-progress', lesson?.module.course.id, user?.id],
+    queryFn: async () => {
+      if (!user || !lesson?.module.course.id) return [];
+
+      const { data, error } = await supabase
+        .from('user_progress')
+        .select('lesson_id, completed')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user && !!lesson?.module.course.id
+  });
+
+  // Get course with progress for navigation
+  const courseWithProgress = React.useMemo(() => {
+    if (!lesson?.module.course || !courseProgress) return null;
+    
+    return {
+      ...lesson.module.course,
+      modules: lesson.module.course.modules.map(module => ({
+        ...module,
+        lessons: module.lessons.map(lessonItem => ({
+          ...lessonItem,
+          completed: courseProgress.some(p => p.lesson_id === lessonItem.id && p.completed)
+        }))
+      }))
+    };
+  }, [lesson, courseProgress]);
+
+  // Fetch quiz and assignment data
+  const { data: quiz } = useQuizByLesson(lessonId || '');
+  const { data: quizResults } = useQuizResults(quiz?.id || '');
+  const { data: assignment } = useAssignmentByLesson(lessonId || '');
+  const { data: assignmentSubmission } = useAssignmentSubmission(assignment?.id || '');
 
   const { data: progress } = useQuery({
     queryKey: ['lesson-progress', lessonId, user?.id],
@@ -110,32 +176,33 @@ const LessonPlayer = () => {
     enabled: !!user && !!lessonId
   });
 
-  // Fetch quiz and assignment data
-  const { data: quiz } = useQuizByLesson(lessonId || '');
-  const { data: quizResults } = useQuizResults(quiz?.id || '');
-  const { data: assignment } = useAssignmentByLesson(lessonId || '');
-  const { data: assignmentSubmission } = useAssignmentSubmission(assignment?.id || '');
+  // Get next/previous lessons for navigation
+  const getNavigationLessons = () => {
+    if (!courseWithProgress || !lessonId) return { nextLesson: null, previousLesson: null };
+    
+    let foundCurrent = false;
+    let previousLesson = null;
+    let nextLesson = null;
+    
+    for (const module of courseWithProgress.modules) {
+      for (const lessonItem of module.lessons) {
+        if (foundCurrent && !nextLesson) {
+          nextLesson = lessonItem;
+          break;
+        }
+        if (lessonItem.id === lessonId) {
+          foundCurrent = true;
+        } else if (!foundCurrent) {
+          previousLesson = lessonItem;
+        }
+      }
+      if (nextLesson) break;
+    }
+    
+    return { nextLesson, previousLesson };
+  };
 
-  // Fetch next lesson for autoplay
-  const { data: nextLesson } = useQuery({
-    queryKey: ['next-lesson', lessonId],
-    queryFn: async () => {
-      if (!lessonId || !lesson) return null;
-
-      const { data, error } = await supabase
-        .from('lessons')
-        .select('id, title, order_index')
-        .eq('module_id', lesson.module.id)
-        .gt('order_index', lesson.order_index || 0)
-        .order('order_index', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!lesson && !!lessonId
-  });
+  const { nextLesson, previousLesson } = getNavigationLessons();
 
   const updateProgressMutation = useMutation({
     mutationFn: async ({ watchPercentage, completed }: { watchPercentage: number; completed: boolean }) => {
@@ -311,6 +378,13 @@ const LessonPlayer = () => {
     }
   };
 
+  // Build breadcrumb items
+  const breadcrumbItems = lesson ? [
+    { label: lesson.module.course.title, href: `/course/${lesson.module.course.id}` },
+    { label: lesson.module.title },
+    { label: lesson.title, isActive: true }
+  ] : [];
+
   const startProgressTracking = () => {
     if (intervalRef.current) return;
 
@@ -445,6 +519,10 @@ const LessonPlayer = () => {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
   useEffect(() => {
     if (progress) {
       setWatchPercentage(progress.watch_percentage || 0);
@@ -483,41 +561,86 @@ const LessonPlayer = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="max-w-4xl mx-auto p-6">
-        {/* Header */}
-        <div className="mb-6">
-          <Link to={`/course/${lesson.module.course.id}`}>
-            <Button variant="ghost" className="mb-4">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to {lesson.module.course.title}
-            </Button>
-          </Link>
+      {/* Course Navigation Sidebar */}
+      {courseWithProgress && (
+        <CourseNavigation
+          course={courseWithProgress}
+          currentLessonId={lessonId}
+          isOpen={sidebarOpen}
+          onToggle={toggleSidebar}
+        />
+      )}
 
-          <div className="flex items-center space-x-2 text-sm text-gray-600 mb-4">
-            <span>{lesson.module.course.title}</span>
-            <span>•</span>
-            <span>{lesson.module.title}</span>
-          </div>
-        </div>
+      <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-80' : 'ml-0'}`}>
+        <div className="max-w-4xl mx-auto p-6">
+          {/* Header with Breadcrumbs */}
+          <div className="mb-6">
+            <BreadcrumbNavigation items={breadcrumbItems} className="mb-4" />
+            
+            <div className="flex items-center justify-between mb-4">
+              <Link to={`/course/${lesson.module.course.id}`}>
+                <Button variant="ghost">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back to Course
+                </Button>
+              </Link>
 
-        {/* Lesson Content */}
-        <Card className="bg-white/80 backdrop-blur-md border-white/20 mb-6">
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <CardTitle className="text-2xl font-bold mb-2 flex items-center gap-3">
-                  {lesson.title}
-                  {isCompleted && <CheckCircle className="w-6 h-6 text-green-500" />}
-                </CardTitle>
-                <CardDescription className="text-lg">{lesson.description}</CardDescription>
+              {/* Lesson Navigation */}
+              <div className="flex items-center space-x-2">
+                {previousLesson ? (
+                  <Link to={`/lesson/${previousLesson.id}`}>
+                    <Button variant="outline" size="sm">
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Previous
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button variant="outline" size="sm" disabled>
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Previous
+                  </Button>
+                )}
+                
+                {nextLesson ? (
+                  <Link to={`/lesson/${nextLesson.id}`}>
+                    <Button size="sm">
+                      Next
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button size="sm" disabled>
+                    Next
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                )}
               </div>
-              <Badge className="flex items-center space-x-1 bg-gradient-to-r from-yellow-500 to-orange-500">
-                <Trophy className="w-3 h-3" />
-                <span>{lesson.xp_reward} XP</span>
-              </Badge>
             </div>
-          </CardHeader>
-          <CardContent>
+          </div>
+
+          {/* Lesson Content */}
+          <Card className="bg-white/80 backdrop-blur-md border-white/20 mb-6">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <CardTitle className="text-2xl font-bold mb-2 flex items-center gap-3">
+                    {lesson.title}
+                    {isCompleted && <CheckCircle className="w-6 h-6 text-green-500" />}
+                  </CardTitle>
+                  <CardDescription className="text-lg">{lesson.description}</CardDescription>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Badge className="flex items-center space-x-1 bg-gradient-to-r from-yellow-500 to-orange-500">
+                    <Trophy className="w-3 h-3" />
+                    <span>{lesson.xp_reward} XP</span>
+                  </Badge>
+                  <Badge variant="outline" className="capitalize">
+                    {lesson.type}
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
             {lesson.type === 'video' && (
               <div className="space-y-4">
                 <div 
@@ -792,8 +915,9 @@ const LessonPlayer = () => {
                 <p className="text-gray-600 mb-6">This assignment hasn't been created yet.</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
