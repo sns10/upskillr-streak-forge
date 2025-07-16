@@ -41,12 +41,12 @@ const LeaderboardCard = () => {
             .from('profiles')
             .select('id, full_name')
             .eq('id', userId)
-            .single(),
+            .maybeSingle(),
           supabase
             .from('streaks')
             .select('current_streak')
             .eq('user_id', userId)
-            .single()
+            .maybeSingle()
         ]);
 
         if (profileResult.data) {

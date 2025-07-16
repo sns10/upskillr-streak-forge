@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { ArrowLeft, Trophy, CheckCircle, Play, Award, Volume2, Settings, SkipForward, Pause, PlayIcon, Maximize, Minimize, Brain, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Trophy, CheckCircle, Play, Award, Volume2, Settings, SkipForward, Pause, PlayIcon, Maximize, Minimize, Brain, ChevronLeft, ChevronRight, VolumeX } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -237,6 +237,8 @@ const LessonPlayer = () => {
           watch_percentage: watchPercentage,
           completed,
           completed_at: completed ? new Date().toISOString() : null
+        }, {
+          onConflict: 'user_id,lesson_id'
         });
 
       if (error) throw error;
