@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import QuizPlayer from '@/components/QuizPlayer';
 import AdaptiveQuizPlayer from '@/components/AdaptiveQuizPlayer';
 import AssignmentPlayer from '@/components/AssignmentPlayer';
+import CodingAssignmentPlayer from '@/components/CodingAssignmentPlayer';
 import CourseNavigation from '@/components/CourseNavigation';
 import BreadcrumbNavigation from '@/components/BreadcrumbNavigation';
 import { useQuizManagement } from '@/hooks/useQuizManagement';
@@ -74,7 +75,7 @@ const LessonPlayer = () => {
   
   // Quiz and Assignment hooks
   const { useQuizByLesson, useQuizResults, submitQuizMutation } = useQuizManagement();
-  const { useAssignmentByLesson, useAssignmentSubmission, submitAssignmentMutation } = useAssignmentManagement();
+  const { useAssignmentByLesson, useAssignmentSubmission, useTestCases, submitAssignmentMutation } = useAssignmentManagement();
 
   const { data: lesson, isLoading } = useQuery({
     queryKey: ['lesson', lessonId],
@@ -159,6 +160,7 @@ const LessonPlayer = () => {
   const { data: quizResults } = useQuizResults(quiz?.id || '');
   const { data: assignment } = useAssignmentByLesson(lessonId || '');
   const { data: assignmentSubmission } = useAssignmentSubmission(assignment?.id || '');
+  const { data: testCases } = useTestCases(assignment?.id || '');
 
   const { data: progress } = useQuery({
     queryKey: ['lesson-progress', lessonId, user?.id],
@@ -960,18 +962,35 @@ const LessonPlayer = () => {
 
             {/* Assignment Lesson */}
             {lesson.type === 'assignment' && assignment && (
-              <AssignmentPlayer 
-                assignment={assignment}
-                submission={assignmentSubmission || undefined}
-                onSubmit={(textSubmission, file) => {
-                  submitAssignmentMutation.mutate({
-                    assignment_id: assignment.id,
-                    text_submission: textSubmission,
-                    file
-                  });
-                }}
-                isSubmitting={submitAssignmentMutation.isPending}
-              />
+              <>
+                {assignment.assignment_type === 'coding' ? (
+                  <CodingAssignmentPlayer 
+                    assignment={assignment as any}
+                    submission={assignmentSubmission || undefined}
+                    testCases={testCases || []}
+                    onSubmit={(code) => {
+                      submitAssignmentMutation.mutate({
+                        assignment_id: assignment.id,
+                        text_submission: code
+                      });
+                    }}
+                    isSubmitting={submitAssignmentMutation.isPending}
+                  />
+                ) : (
+                  <AssignmentPlayer 
+                    assignment={assignment}
+                    submission={assignmentSubmission || undefined}
+                    onSubmit={(textSubmission, file) => {
+                      submitAssignmentMutation.mutate({
+                        assignment_id: assignment.id,
+                        text_submission: textSubmission,
+                        file
+                      });
+                    }}
+                    isSubmitting={submitAssignmentMutation.isPending}
+                  />
+                )}
+              </>
             )}
 
             {lesson.type === 'assignment' && !assignment && (

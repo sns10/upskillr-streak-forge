@@ -9,11 +9,25 @@ interface Assignment {
   title: string;
   description: string;
   instructions: string;
+  assignment_type: 'regular' | 'coding';
+  programming_language?: string;
+  starter_code?: string;
+  template_code?: string;
   max_file_size?: number;
   allowed_file_types?: string[];
   due_date?: string;
   xp_reward: number;
   created_at: string;
+}
+
+interface TestCase {
+  id: string;
+  assignment_id: string;
+  input_data: string;
+  expected_output: string;
+  is_hidden: boolean;
+  points: number;
+  description?: string;
 }
 
 interface AssignmentSubmission {
@@ -27,6 +41,10 @@ interface AssignmentSubmission {
   grade?: number;
   feedback?: string;
   status: 'submitted' | 'graded' | 'returned';
+  test_results?: any;
+  passed_tests?: number;
+  total_tests?: number;
+  auto_grade?: number;
 }
 
 interface CreateAssignmentData {
@@ -34,10 +52,21 @@ interface CreateAssignmentData {
   title: string;
   description: string;
   instructions: string;
+  assignment_type?: 'regular' | 'coding';
+  programming_language?: string;
+  starter_code?: string;
+  template_code?: string;
   max_file_size?: number;
   allowed_file_types?: string[];
   due_date?: string;
   xp_reward: number;
+  test_cases?: Array<{
+    input_data: string;
+    expected_output: string;
+    is_hidden: boolean;
+    points: number;
+    description?: string;
+  }>;
 }
 
 interface SubmitAssignmentData {
@@ -50,6 +79,24 @@ export const useAssignmentManagement = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch test cases for an assignment
+  const useTestCases = (assignmentId: string) => {
+    return useQuery({
+      queryKey: ['test-cases', assignmentId],
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from('test_cases')
+          .select('*')
+          .eq('assignment_id', assignmentId)
+          .order('created_at');
+
+        if (error) throw error;
+        return data as TestCase[];
+      },
+      enabled: !!assignmentId
+    });
+  };
 
   // Fetch assignment by lesson ID
   const useAssignmentByLesson = (lessonId: string) => {
@@ -116,13 +163,38 @@ export const useAssignmentManagement = () => {
     mutationFn: async (data: CreateAssignmentData) => {
       if (!user) throw new Error('User not authenticated');
 
+      // Extract test cases from data
+      const { test_cases, ...assignmentData } = data;
+
       const { data: assignment, error } = await supabase
         .from('assignments')
-        .insert(data)
+        .insert(assignmentData)
         .select()
         .single();
 
       if (error) throw error;
+
+      // Insert test cases if provided
+      if (test_cases && test_cases.length > 0) {
+        const testCaseInserts = test_cases.map(tc => ({
+          assignment_id: assignment.id,
+          input_data: tc.input_data,
+          expected_output: tc.expected_output,
+          is_hidden: tc.is_hidden,
+          points: tc.points,
+          description: tc.description
+        }));
+
+        const { error: testCasesError } = await supabase
+          .from('test_cases')
+          .insert(testCaseInserts);
+
+        if (testCasesError) {
+          console.error('Test cases creation error:', testCasesError);
+          // Don't fail the whole operation, just warn
+        }
+      }
+
       return assignment;
     },
     onSuccess: () => {
@@ -193,6 +265,34 @@ export const useAssignmentManagement = () => {
         .single();
 
       if (error) throw error;
+
+      // For coding assignments, run automated tests
+      if (data.text_submission) {
+        // Get assignment details to check if it's a coding assignment
+        const { data: assignment } = await supabase
+          .from('assignments')
+          .select('assignment_type, programming_language')
+          .eq('id', data.assignment_id)
+          .single();
+
+        if (assignment?.assignment_type === 'coding') {
+          try {
+            // Run automated tests
+            await supabase.functions.invoke('run-code-tests', {
+              body: {
+                submissionId: submission.id,
+                code: data.text_submission,
+                assignmentId: data.assignment_id,
+                language: assignment.programming_language
+              }
+            });
+          } catch (testError) {
+            console.warn('Automated testing failed:', testError);
+            // Don't fail the submission if testing fails
+          }
+        }
+      }
+
       return submission;
     },
     onSuccess: () => {
@@ -291,6 +391,7 @@ export const useAssignmentManagement = () => {
     useAssignmentByLesson,
     useAssignmentSubmission,
     useAssignmentSubmissions,
+    useTestCases,
     createAssignmentMutation,
     submitAssignmentMutation,
     gradeAssignmentMutation,

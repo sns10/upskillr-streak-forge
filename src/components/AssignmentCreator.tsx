@@ -6,8 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Trash2, Save, Calendar } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Trash2, Save, Calendar, Code } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import CodingAssignmentCreator from './CodingAssignmentCreator';
 
 interface CreateAssignmentData {
   lesson_id: string;
@@ -28,6 +30,7 @@ interface AssignmentCreatorProps {
 }
 
 const AssignmentCreator = ({ lessonId, onSave, onCancel, isLoading }: AssignmentCreatorProps) => {
+  const [assignmentType, setAssignmentType] = useState<'regular' | 'coding'>('regular');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -103,9 +106,39 @@ const AssignmentCreator = ({ lessonId, onSave, onCancel, isLoading }: Assignment
     }
   };
 
+  const handleCodingAssignmentSave = (assignmentData: any) => {
+    onSave(assignmentData);
+  };
+
   return (
     <div className="space-y-6">
       <Card>
+        <CardHeader>
+          <CardTitle>Assignment Type</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={assignmentType} onValueChange={(value) => setAssignmentType(value as 'regular' | 'coding')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="regular">Regular Assignment</TabsTrigger>
+              <TabsTrigger value="coding">
+                <Code className="w-4 h-4 mr-2" />
+                Coding Assignment
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      {assignmentType === 'coding' ? (
+        <CodingAssignmentCreator
+          lessonId={lessonId}
+          onSave={handleCodingAssignmentSave}
+          onCancel={onCancel}
+          isLoading={isLoading}
+        />
+      ) : (
+        <>
+          <Card>
         <CardHeader>
           <CardTitle>Create Assignment</CardTitle>
         </CardHeader>
@@ -238,7 +271,9 @@ const AssignmentCreator = ({ lessonId, onSave, onCancel, isLoading }: Assignment
           <Save className="w-4 h-4 mr-2" />
           {isLoading ? 'Saving...' : 'Save Assignment'}
         </Button>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

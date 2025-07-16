@@ -62,38 +62,50 @@ export type Database = {
       assignment_submissions: {
         Row: {
           assignment_id: string
+          auto_grade: number | null
           feedback: string | null
           file_name: string | null
           file_url: string | null
           grade: number | null
           id: string
+          passed_tests: number | null
           status: string
           submitted_at: string
+          test_results: Json | null
           text_submission: string | null
+          total_tests: number | null
           user_id: string
         }
         Insert: {
           assignment_id: string
+          auto_grade?: number | null
           feedback?: string | null
           file_name?: string | null
           file_url?: string | null
           grade?: number | null
           id?: string
+          passed_tests?: number | null
           status?: string
           submitted_at?: string
+          test_results?: Json | null
           text_submission?: string | null
+          total_tests?: number | null
           user_id: string
         }
         Update: {
           assignment_id?: string
+          auto_grade?: number | null
           feedback?: string | null
           file_name?: string | null
           file_url?: string | null
           grade?: number | null
           id?: string
+          passed_tests?: number | null
           status?: string
           submitted_at?: string
+          test_results?: Json | null
           text_submission?: string | null
+          total_tests?: number | null
           user_id?: string
         }
         Relationships: []
@@ -101,6 +113,7 @@ export type Database = {
       assignments: {
         Row: {
           allowed_file_types: string[] | null
+          assignment_type: string
           created_at: string
           description: string | null
           due_date: string | null
@@ -108,11 +121,15 @@ export type Database = {
           instructions: string
           lesson_id: string
           max_file_size: number | null
+          programming_language: string | null
+          starter_code: string | null
+          template_code: string | null
           title: string
           xp_reward: number
         }
         Insert: {
           allowed_file_types?: string[] | null
+          assignment_type?: string
           created_at?: string
           description?: string | null
           due_date?: string | null
@@ -120,11 +137,15 @@ export type Database = {
           instructions: string
           lesson_id: string
           max_file_size?: number | null
+          programming_language?: string | null
+          starter_code?: string | null
+          template_code?: string | null
           title: string
           xp_reward?: number
         }
         Update: {
           allowed_file_types?: string[] | null
+          assignment_type?: string
           created_at?: string
           description?: string | null
           due_date?: string | null
@@ -132,6 +153,9 @@ export type Database = {
           instructions?: string
           lesson_id?: string
           max_file_size?: number | null
+          programming_language?: string | null
+          starter_code?: string | null
+          template_code?: string | null
           title?: string
           xp_reward?: number
         }
@@ -469,6 +493,47 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      test_cases: {
+        Row: {
+          assignment_id: string
+          created_at: string
+          description: string | null
+          expected_output: string
+          id: string
+          input_data: string
+          is_hidden: boolean
+          points: number
+        }
+        Insert: {
+          assignment_id: string
+          created_at?: string
+          description?: string | null
+          expected_output: string
+          id?: string
+          input_data: string
+          is_hidden?: boolean
+          points?: number
+        }
+        Update: {
+          assignment_id?: string
+          created_at?: string
+          description?: string | null
+          expected_output?: string
+          id?: string
+          input_data?: string
+          is_hidden?: boolean
+          points?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_cases_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_badges: {
         Row: {
