@@ -4,7 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Trophy, CheckCircle, Play, Award } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
+import { ArrowLeft, Trophy, CheckCircle, Play, Award, Volume2, Settings, SkipForward, Pause, PlayIcon, Maximize, Minimize } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +22,7 @@ interface Lesson {
   type: 'video' | 'quiz' | 'assignment';
   content_url: string;
   xp_reward: number;
+  order_index: number;
   module: {
     id: string;
     title: string;
@@ -38,8 +41,17 @@ const LessonPlayer = () => {
   const queryClient = useQueryClient();
   const [watchPercentage, setWatchPercentage] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(50);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [autoplayNext, setAutoplayNext] = useState(false);
   const playerRef = useRef<any>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Quiz and Assignment hooks
   const { useQuizByLesson, useQuizResults, submitQuizMutation } = useQuizManagement();
@@ -59,6 +71,7 @@ const LessonPlayer = () => {
           type,
           content_url,
           xp_reward,
+          order_index,
           module:modules (
             id,
             title,
@@ -100,6 +113,27 @@ const LessonPlayer = () => {
   const { data: quizResults } = useQuizResults(quiz?.id || '');
   const { data: assignment } = useAssignmentByLesson(lessonId || '');
   const { data: assignmentSubmission } = useAssignmentSubmission(assignment?.id || '');
+
+  // Fetch next lesson for autoplay
+  const { data: nextLesson } = useQuery({
+    queryKey: ['next-lesson', lessonId],
+    queryFn: async () => {
+      if (!lessonId || !lesson) return null;
+
+      const { data, error } = await supabase
+        .from('lessons')
+        .select('id, title, order_index')
+        .eq('module_id', lesson.module.id)
+        .gt('order_index', lesson.order_index || 0)
+        .order('order_index', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!lesson && !!lessonId
+  });
 
   const updateProgressMutation = useMutation({
     mutationFn: async ({ watchPercentage, completed }: { watchPercentage: number; completed: boolean }) => {
@@ -224,12 +258,14 @@ const LessonPlayer = () => {
         videoId: videoId,
         playerVars: {
           autoplay: 0,
-          controls: 1,
+          controls: 0, // Disable default controls for custom implementation
           modestbranding: 1,
-          rel: 0
+          rel: 0,
+          iv_load_policy: 3
         },
         events: {
-          onStateChange: onPlayerStateChange
+          onStateChange: onPlayerStateChange,
+          onReady: onPlayerReady
         }
       });
     };
@@ -243,11 +279,33 @@ const LessonPlayer = () => {
     };
   }, [lesson]);
 
+  const onPlayerReady = (event: any) => {
+    setDuration(event.target.getDuration());
+    setVolume(event.target.getVolume());
+  };
+
   const onPlayerStateChange = (event: any) => {
-    if (event.data === window.YT.PlayerState.PLAYING) {
+    const state = event.data;
+    setIsPlaying(state === window.YT.PlayerState.PLAYING);
+    
+    if (state === window.YT.PlayerState.PLAYING) {
       startProgressTracking();
-    } else if (event.data === window.YT.PlayerState.PAUSED || event.data === window.YT.PlayerState.ENDED) {
+      hideControlsAfterDelay();
+    } else if (state === window.YT.PlayerState.PAUSED) {
       stopProgressTracking();
+      setShowControls(true);
+      clearControlsTimeout();
+    } else if (state === window.YT.PlayerState.ENDED) {
+      stopProgressTracking();
+      setShowControls(true);
+      clearControlsTimeout();
+      
+      // Autoplay next lesson if enabled
+      if (autoplayNext && nextLesson) {
+        setTimeout(() => {
+          navigate(`/lesson/${nextLesson.id}`);
+        }, 3000);
+      }
     }
   };
 
@@ -256,11 +314,13 @@ const LessonPlayer = () => {
 
     intervalRef.current = setInterval(() => {
       if (playerRef.current && playerRef.current.getCurrentTime && playerRef.current.getDuration) {
-        const currentTime = playerRef.current.getCurrentTime();
-        const duration = playerRef.current.getDuration();
+        const current = playerRef.current.getCurrentTime();
+        const totalDuration = playerRef.current.getDuration();
         
-        if (duration > 0) {
-          const percentage = Math.round((currentTime / duration) * 100);
+        setCurrentTime(current);
+        
+        if (totalDuration > 0) {
+          const percentage = Math.round((current / totalDuration) * 100);
           setWatchPercentage(percentage);
 
           // Mark as completed if watched >80% and not already completed
@@ -289,7 +349,7 @@ const LessonPlayer = () => {
           }
         }
       }
-    }, 2000);
+    }, 1000);
   };
 
   const stopProgressTracking = () => {
@@ -298,6 +358,90 @@ const LessonPlayer = () => {
       intervalRef.current = null;
     }
   };
+
+  const hideControlsAfterDelay = () => {
+    clearControlsTimeout();
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
+  };
+
+  const clearControlsTimeout = () => {
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+      controlsTimeoutRef.current = null;
+    }
+  };
+
+  const togglePlayPause = () => {
+    if (playerRef.current) {
+      if (isPlaying) {
+        playerRef.current.pauseVideo();
+      } else {
+        playerRef.current.playVideo();
+      }
+    }
+  };
+
+  const handleVolumeChange = (value: number[]) => {
+    const newVolume = value[0];
+    setVolume(newVolume);
+    if (playerRef.current) {
+      playerRef.current.setVolume(newVolume);
+    }
+  };
+
+  const handlePlaybackRateChange = (rate: string) => {
+    const newRate = parseFloat(rate);
+    setPlaybackRate(newRate);
+    if (playerRef.current) {
+      playerRef.current.setPlaybackRate(newRate);
+    }
+  };
+
+  const handleSeek = (value: number[]) => {
+    const seekTime = (value[0] / 100) * duration;
+    if (playerRef.current) {
+      playerRef.current.seekTo(seekTime);
+    }
+  };
+
+  const skipForward = () => {
+    if (playerRef.current) {
+      const currentTime = playerRef.current.getCurrentTime();
+      playerRef.current.seekTo(currentTime + 10);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  const toggleFullscreen = () => {
+    const element = document.getElementById('video-container');
+    if (!element) return;
+
+    if (!isFullscreen) {
+      if (element.requestFullscreen) {
+        element.requestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   useEffect(() => {
     if (progress) {
@@ -374,14 +518,156 @@ const LessonPlayer = () => {
           <CardContent>
             {lesson.type === 'video' && (
               <div className="space-y-4">
-                <div className="relative bg-black rounded-lg overflow-hidden">
+                <div 
+                  id="video-container"
+                  className="relative bg-black rounded-lg overflow-hidden group cursor-pointer"
+                  onMouseMove={() => {
+                    setShowControls(true);
+                    if (isPlaying) hideControlsAfterDelay();
+                  }}
+                  onMouseLeave={() => {
+                    if (isPlaying) hideControlsAfterDelay();
+                  }}
+                  onClick={() => {
+                    setShowControls(true);
+                    if (isPlaying) hideControlsAfterDelay();
+                  }}
+                >
                   <div id="youtube-player" className="w-full aspect-video"></div>
+                  
+                  {/* Custom Video Controls Overlay */}
+                  <div className={`absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                    {/* Center Play/Pause Button */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Button
+                        variant="ghost"
+                        size="lg"
+                        onClick={togglePlayPause}
+                        className="w-16 h-16 rounded-full bg-black/40 hover:bg-black/60 text-white border-2 border-white/30"
+                      >
+                        {isPlaying ? <Pause className="w-8 h-8" /> : <PlayIcon className="w-8 h-8" />}
+                      </Button>
+                    </div>
+
+                    {/* Bottom Controls */}
+                    <div className="absolute bottom-0 left-0 right-0 p-4 space-y-3">
+                      {/* Progress Bar */}
+                      <div className="space-y-2">
+                        <Slider
+                          value={[watchPercentage]}
+                          onValueChange={handleSeek}
+                          max={100}
+                          step={0.1}
+                          className="w-full"
+                        />
+                        <div className="flex justify-between text-xs text-white/80">
+                          <span>{formatTime(currentTime)}</span>
+                          <span>{formatTime(duration)}</span>
+                        </div>
+                      </div>
+
+                      {/* Control Buttons */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={togglePlayPause}
+                            className="text-white hover:bg-white/20"
+                          >
+                            {isPlaying ? <Pause className="w-5 h-5" /> : <PlayIcon className="w-5 h-5" />}
+                          </Button>
+                          
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={skipForward}
+                            className="text-white hover:bg-white/20"
+                          >
+                            <SkipForward className="w-5 h-5" />
+                          </Button>
+
+                          <div className="flex items-center space-x-2">
+                            <Volume2 className="w-4 h-4 text-white" />
+                            <Slider
+                              value={[volume]}
+                              onValueChange={handleVolumeChange}
+                              max={100}
+                              step={1}
+                              className="w-20"
+                            />
+                          </div>
+
+                          <div className="text-white text-sm">
+                            {volume}%
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-3">
+                          <Select value={playbackRate.toString()} onValueChange={handlePlaybackRateChange}>
+                            <SelectTrigger className="w-20 bg-black/40 border-white/30 text-white text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="0.25">0.25x</SelectItem>
+                              <SelectItem value="0.5">0.5x</SelectItem>
+                              <SelectItem value="0.75">0.75x</SelectItem>
+                              <SelectItem value="1">1x</SelectItem>
+                              <SelectItem value="1.25">1.25x</SelectItem>
+                              <SelectItem value="1.5">1.5x</SelectItem>
+                              <SelectItem value="2">2x</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={toggleFullscreen}
+                            className="text-white hover:bg-white/20"
+                          >
+                            {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Settings Panel */}
+                    <div className="absolute top-4 right-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-white hover:bg-white/20"
+                      >
+                        <Settings className="w-5 h-5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Video Options */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <label className="flex items-center space-x-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={autoplayNext}
+                        onChange={(e) => setAutoplayNext(e.target.checked)}
+                        className="rounded"
+                      />
+                      <span>Autoplay next lesson</span>
+                    </label>
+                    {nextLesson && autoplayNext && (
+                      <span className="text-sm text-gray-600">
+                        Next: {nextLesson.title}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 
                 {user && (
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm text-gray-600">
-                      <span>Progress</span>
+                      <span>Overall Progress</span>
                       <span>{watchPercentage}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
