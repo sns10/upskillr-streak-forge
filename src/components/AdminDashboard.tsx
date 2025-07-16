@@ -3,7 +3,16 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { 
@@ -19,7 +28,10 @@ import {
   LogOut,
   CheckCircle,
   Clock,
-  MoreVertical
+  MoreVertical,
+  Eye,
+  Target,
+  Award
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -34,6 +46,7 @@ import CourseEditModal from './CourseEditModal';
 import ModuleEditModal from './ModuleEditModal';
 import LessonEditModal from './LessonEditModal';
 import DeleteConfirmation from './DeleteConfirmation';
+import { StudentDetailModal } from './StudentDetailModal';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -46,6 +59,7 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const [editingModule, setEditingModule] = useState<any>(null);
   const [editingLesson, setEditingLesson] = useState<any>(null);
   const [deletingItem, setDeletingItem] = useState<{type: 'course' | 'module' | 'lesson', id: string, name: string} | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   
   const { data: stats, isLoading: statsLoading } = useAdminStats();
   const { 
@@ -78,57 +92,70 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
     }
   });
 
-  const { data: studentLeaderboard } = useQuery({
-    queryKey: ['student-leaderboard'],
+  // Enhanced student query with more detailed analytics
+  const { data: students = [] } = useQuery({
+    queryKey: ['admin-students'],
     queryFn: async () => {
-      // Get all students from profiles table
-      const { data: profilesData, error: profilesError } = await supabase
+      // First get all students from profiles
+      const { data: allStudents, error: studentsError } = await supabase
         .from('profiles')
-        .select('id, full_name, created_at');
+        .select('id, full_name, avatar_url');
 
-      if (profilesError) throw profilesError;
-      if (!profilesData || !profilesData.length) return [];
+      if (studentsError) throw studentsError;
 
-      // Get all user XP records
-      const { data: xpData, error: xpError } = await supabase
-        .from('user_xp')
-        .select('user_id, amount');
+      // Then get detailed analytics for each student
+      const studentsWithAnalytics = await Promise.all(
+        allStudents.map(async (student) => {
+          // Get XP data
+          const { data: xpData } = await supabase
+            .from('user_xp')
+            .select('amount')
+            .eq('user_id', student.id);
 
-      if (xpError) throw xpError;
+          // Get lesson progress data
+          const { data: progressData } = await supabase
+            .from('user_progress')
+            .select('completed, lesson_id')
+            .eq('user_id', student.id);
 
-      // Calculate total XP per user
-      const userXpTotals: Record<string, number> = {};
-      xpData?.forEach(record => {
-        userXpTotals[record.user_id] = (userXpTotals[record.user_id] || 0) + record.amount;
-      });
+          // Get total lessons count for progress calculation
+          const { data: allLessons } = await supabase
+            .from('lessons')
+            .select('id');
 
-      // Get profiles and streaks for all users in parallel
-      const leaderboardPromises = profilesData.map(async (profile) => {
-        const [streakResult] = await Promise.all([
-          supabase
+          // Get quiz results
+          const { data: quizData } = await supabase
+            .from('quiz_results')
+            .select('score')
+            .eq('user_id', student.id);
+
+          // Get streak data
+          const { data: streakData } = await supabase
             .from('streaks')
-            .select('current_streak, longest_streak')
-            .eq('user_id', profile.id)
-            .maybeSingle()
-        ]);
+            .select('current_streak')
+            .eq('user_id', student.id)
+            .maybeSingle();
 
-        return {
-          ...profile,
-          totalXP: userXpTotals[profile.id] || 0,
-          current_streak: streakResult.data?.current_streak || 0,
-          longest_streak: streakResult.data?.longest_streak || 0
-        };
-      });
+          // Get badge count
+          const { data: badgeData } = await supabase
+            .from('user_badges')
+            .select('id')
+            .eq('user_id', student.id);
 
-      const leaderboardData = await Promise.all(leaderboardPromises);
-      
-      // Sort by XP (descending), then by name for those with same XP
-      return leaderboardData.sort((a, b) => {
-        if (b.totalXP !== a.totalXP) {
-          return b.totalXP - a.totalXP;
-        }
-        return (a.full_name || 'Student').localeCompare(b.full_name || 'Student');
-      });
+          return {
+            ...student,
+            total_xp: xpData?.reduce((sum, record) => sum + record.amount, 0) || 0,
+            completed_lessons: progressData?.filter(p => p.completed).length || 0,
+            total_lessons: allLessons?.length || 0,
+            quiz_results: quizData || [],
+            current_streak: streakData?.current_streak || 0,
+            badge_count: badgeData?.length || 0,
+          };
+        })
+      );
+
+      // Sort by total XP descending
+      return studentsWithAnalytics.sort((a, b) => b.total_xp - a.total_xp);
     }
   });
 
@@ -465,34 +492,88 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
 
             <Card>
               <CardHeader>
-                <CardTitle>Student Leaderboard</CardTitle>
-                <CardDescription>Top performing students</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Student Overview
+                </CardTitle>
+                <CardDescription>
+                  Detailed student analytics and management
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {studentLeaderboard?.length ? (
-                    studentLeaderboard.map((student, index) => (
-                      <div key={student.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                            {index + 1}
-                          </div>
-                          <div>
-                            <p className="font-medium">{student.full_name || 'Student'}</p>
-                            <p className="text-sm text-gray-600">
-                              Streak: {student.current_streak || 0} days
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                          <Badge variant="outline">{student.totalXP || 0} XP</Badge>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-gray-500 text-center py-4">No students yet</p>
-                  )}
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student</TableHead>
+                      <TableHead>Total XP</TableHead>
+                      <TableHead>Lessons Completed</TableHead>
+                      <TableHead>Avg Quiz Score</TableHead>
+                      <TableHead>Current Streak</TableHead>
+                      <TableHead>Badges</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {students.map((student) => {
+                      const avgScore = student.quiz_results?.length > 0
+                        ? Math.round(student.quiz_results.reduce((sum: number, quiz: any) => sum + quiz.score, 0) / student.quiz_results.length)
+                        : 0;
+                      
+                      return (
+                        <TableRow key={student.id}>
+                          <TableCell className="font-medium">
+                            {student.full_name || 'Unnamed Student'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className="bg-primary">
+                              {student.total_xp} XP
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span>{student.completed_lessons}</span>
+                              <Progress 
+                                value={student.total_lessons > 0 ? (student.completed_lessons / student.total_lessons) * 100 : 0} 
+                                className="w-16 h-2" 
+                              />
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={
+                              avgScore >= 80 ? "bg-green-500" : 
+                              avgScore >= 60 ? "bg-yellow-500" : 
+                              "bg-red-500"
+                            }>
+                              {avgScore}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Star className="w-4 h-4 text-yellow-500" />
+                              {student.current_streak || 0}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              <Award className="w-3 h-3 mr-1" />
+                              {student.badge_count || 0}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setSelectedStudentId(student.id)}
+                            >
+                              <Eye className="w-4 h-4 mr-1" />
+                              View Details
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
@@ -547,6 +628,11 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
           }
         />
       )}
+
+      <StudentDetailModal 
+        studentId={selectedStudentId}
+        onClose={() => setSelectedStudentId(null)}
+      />
     </div>
   );
 };
