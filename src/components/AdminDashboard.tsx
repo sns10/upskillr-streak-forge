@@ -81,55 +81,54 @@ const AdminDashboard = ({ onLogout }: AdminDashboardProps) => {
   const { data: studentLeaderboard } = useQuery({
     queryKey: ['student-leaderboard'],
     queryFn: async () => {
+      // Get all students from profiles table
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, created_at');
+
+      if (profilesError) throw profilesError;
+      if (!profilesData || !profilesData.length) return [];
+
       // Get all user XP records
       const { data: xpData, error: xpError } = await supabase
         .from('user_xp')
         .select('user_id, amount');
 
       if (xpError) throw xpError;
-      if (!xpData || !xpData.length) return [];
 
       // Calculate total XP per user
       const userXpTotals: Record<string, number> = {};
-      xpData.forEach(record => {
+      xpData?.forEach(record => {
         userXpTotals[record.user_id] = (userXpTotals[record.user_id] || 0) + record.amount;
       });
 
-      // Get top 10 users by XP
-      const topUsers = Object.entries(userXpTotals)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 10);
-
-      if (!topUsers.length) return [];
-
-      // Get profiles and streaks for top users in parallel
-      const leaderboardPromises = topUsers.map(async ([userId, totalXP]) => {
-        const [profileResult, streakResult] = await Promise.all([
-          supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .single(),
+      // Get profiles and streaks for all users in parallel
+      const leaderboardPromises = profilesData.map(async (profile) => {
+        const [streakResult] = await Promise.all([
           supabase
             .from('streaks')
             .select('current_streak, longest_streak')
-            .eq('user_id', userId)
-            .single()
+            .eq('user_id', profile.id)
+            .maybeSingle()
         ]);
 
-        if (profileResult.data) {
-          return {
-            ...profileResult.data,
-            totalXP,
-            current_streak: streakResult.data?.current_streak || 0,
-            longest_streak: streakResult.data?.longest_streak || 0
-          };
-        }
-        return null;
+        return {
+          ...profile,
+          totalXP: userXpTotals[profile.id] || 0,
+          current_streak: streakResult.data?.current_streak || 0,
+          longest_streak: streakResult.data?.longest_streak || 0
+        };
       });
 
       const leaderboardData = await Promise.all(leaderboardPromises);
-      return leaderboardData.filter(Boolean);
+      
+      // Sort by XP (descending), then by name for those with same XP
+      return leaderboardData.sort((a, b) => {
+        if (b.totalXP !== a.totalXP) {
+          return b.totalXP - a.totalXP;
+        }
+        return (a.full_name || 'Student').localeCompare(b.full_name || 'Student');
+      });
     }
   });
 
