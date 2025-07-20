@@ -964,20 +964,28 @@ const LessonPlayer = () => {
             {lesson.type === 'assignment' && assignment && (
               <>
                 {assignment.assignment_type === 'coding' ? (
-                  <CodingAssignmentPlayer 
-                    assignment={assignment as any}
-                    submission={assignmentSubmission || undefined}
-                    testCases={testCases || []}
-                    onSubmit={(code) => {
+                  <div className="w-full">
+                    <iframe 
+                      frameBorder="0" 
+                      width="100%" 
+                      height="500px" 
+                      src="https://replit.com/@sanaskllm/upskillr-poc?embed=true"
+                      className="rounded-lg"
+                    />
+                  </div>
+                ) : (
+                  <AssignmentPlayer
+                    assignment={assignment}
+                    submission={assignmentSubmission}
+                    onSubmit={(textSubmission, file) => {
                       submitAssignmentMutation.mutate({
                         assignment_id: assignment.id,
-                        text_submission: code
+                        text_submission: textSubmission,
+                        file: file
                       });
                     }}
                     isSubmitting={submitAssignmentMutation.isPending}
                   />
-                ) : (
-                 <iframe frameBorder="0" width="100%" height="500px" src="https://replit.com/@sanaskllm/upskillr-poc?embed=true"></iframe>
                 )}
               </>
             )}
