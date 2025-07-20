@@ -964,7 +964,8 @@ const LessonPlayer = () => {
             {lesson.type === 'assignment' && assignment && (
               <>
                 {assignment.assignment_type === 'coding' ? (
-                  <iframe frameBorder="0" width="100%" height="500px" src="https://replit.com/@sanasklm/upskillr-poc?embed=true"></iframe>
+                 <iframe frameBorder="0" width="100%" height="500px" src="https://replit.com/@goldmanm/upskillr-poc?embed=true"></iframe>
+                 
                 ) : (
                   <AssignmentPlayer 
                     assignment={assignment}
