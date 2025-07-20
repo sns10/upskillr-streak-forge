@@ -964,18 +964,7 @@ const LessonPlayer = () => {
             {lesson.type === 'assignment' && assignment && (
               <>
                 {assignment.assignment_type === 'coding' ? (
-                  <CodingAssignmentPlayer 
-                    assignment={assignment as any}
-                    submission={assignmentSubmission || undefined}
-                    testCases={testCases || []}
-                    onSubmit={(code) => {
-                      submitAssignmentMutation.mutate({
-                        assignment_id: assignment.id,
-                        text_submission: code
-                      });
-                    }}
-                    isSubmitting={submitAssignmentMutation.isPending}
-                  />
+                  <iframe frameBorder="0" width="100%" height="500px" src="https://replit.com/@sanasklm/upskillr-poc?embed=true"></iframe>
                 ) : (
                   <AssignmentPlayer 
                     assignment={assignment}
