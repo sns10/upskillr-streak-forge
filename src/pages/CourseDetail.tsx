@@ -1,276 +1,279 @@
-
-import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Play, BookOpen, Trophy, Clock, CheckCircle } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-
-interface Module {
-  id: string;
-  title: string;
-  description: string;
-  order_index: number;
-  lessons: Lesson[];
-}
-
-interface Lesson {
-  id: string;
-  title: string;
-  description: string;
-  type: 'video' | 'quiz' | 'assignment';
-  xp_reward: number;
-  order_index: number;
-  completed?: boolean;
-}
+import { useEffect, useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, Play, Code, FileQuestion, CheckCircle } from "lucide-react";
+import { MainLayout } from "@/components/MainLayout";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Course {
   id: string;
   title: string;
   description: string;
-  thumbnail_url: string | null;
-  modules: Module[];
+  image_url: string;
 }
 
-const CourseDetail = () => {
+interface Lesson {
+  id: string;
+  title: string;
+  lesson_type: 'video' | 'coding' | 'quiz';
+  order_num: number;
+  xp_reward: number;
+  bits_reward: number;
+}
+
+export const CourseDetail = () => {
   const { courseId } = useParams<{ courseId: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
+  const [course, setCourse] = useState<Course | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
 
-  const { data: course, isLoading, error } = useQuery({
-    queryKey: ['course-detail', courseId],
-    queryFn: async () => {
-      if (!courseId) throw new Error('Course ID is required');
+  useEffect(() => {
+    if (!courseId) return;
 
-      // Fetch course with modules and lessons
-      const { data: courseData, error: courseError } = await supabase
-        .from('courses')
+    const fetchCourseData = async () => {
+      try {
+        // Fetch course details
+        const { data: courseData, error: courseError } = await supabase
+          .from('courses')
+          .select('*')
+          .eq('id', courseId)
+          .single();
+
+        if (courseError) throw courseError;
+
+        // Fetch lessons for this course
+        const { data: lessonsData, error: lessonsError } = await supabase
+          .from('lessons')
+          .select('*')
+          .eq('course_id', courseId)
+          .order('order_num', { ascending: true });
+
+        if (lessonsError) throw lessonsError;
+
+        setCourse(courseData);
+        setLessons(lessonsData || []);
+        
+        if (user) {
+          await fetchCompletedLessons(lessonsData || []);
+        }
+      } catch (error) {
+        console.error('Error fetching course data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCourseData();
+  }, [courseId, user]);
+
+  const getLessonIcon = (type: string) => {
+    switch (type) {
+      case 'video':
+        return <Play className="h-4 w-4" />;
+      case 'coding':
+        return <Code className="h-4 w-4" />;
+      case 'quiz':
+        return <FileQuestion className="h-4 w-4" />;
+      default:
+        return <Play className="h-4 w-4" />;
+    }
+  };
+
+  const fetchCompletedLessons = async (lessonsData: Lesson[]) => {
+    try {
+      // Fetch all correct submissions for video lessons (video_<lesson_id>)
+      const { data: videoSubmissions, error: videoError } = await supabase
+        .from("submissions")
+        .select("assignment_id")
+        .eq("student_id", user?.id)
+        .eq("is_correct", true)
+        .like("assignment_id", "video_%");
+
+      if (videoError) throw videoError;
+
+      // Fetch quiz attempts that passed
+      const { data: quizAttempts, error: quizError } = await supabase
+        .from("quiz_attempts")
         .select(`
-          id,
-          title,
-          description,
-          thumbnail_url,
-          modules (
-            id,
-            title,
-            description,
-            order_index,
-            lessons (
-              id,
-              title,
-              description,
-              type,
-              xp_reward,
-              order_index
-            )
+          quiz_id,
+          score,
+          quizzes!inner(
+            lesson_id,
+            passing_score
           )
         `)
-        .eq('id', courseId)
-        .eq('status', 'published')
-        .single();
+        .eq("user_id", user?.id);
 
-      if (courseError) throw courseError;
+      if (quizError) throw quizError;
 
-      // Fetch user progress if authenticated
-      let progressData = [];
-      if (user) {
-        const { data, error: progressError } = await supabase
-          .from('user_progress')
-          .select('lesson_id, completed')
-          .eq('user_id', user.id);
+      // Fetch completed coding assignments
+      const { data: codingSubmissions, error: codingError } = await supabase
+        .from("submissions")
+        .select("assignment_id")
+        .eq("student_id", user?.id)
+        .eq("is_correct", true);
 
-        if (!progressError) {
-          progressData = data || [];
+      if (codingError) throw codingError;
+
+      const completed = new Set<string>();
+      
+      // Add completed video lessons
+      videoSubmissions?.forEach(sub => {
+        const lessonId = sub.assignment_id.replace("video_", "");
+        completed.add(lessonId);
+      });
+
+      // Add passed quiz lessons
+      quizAttempts?.forEach(attempt => {
+        if (attempt.score >= attempt.quizzes.passing_score) {
+          completed.add(attempt.quizzes.lesson_id);
+        }
+      });
+
+      // Check for completed coding lessons (all assignments in lesson completed)
+      for (const lesson of lessonsData) {
+        if (lesson.lesson_type === 'coding') {
+          const { data: assignments, error: assignmentError } = await supabase
+            .from("coding_assignments")
+            .select("id")
+            .eq("lesson_id", lesson.id);
+
+          if (assignmentError) continue;
+
+          const completedAssignments = new Set(
+            codingSubmissions?.map(sub => sub.assignment_id) || []
+          );
+
+          const allCompleted = assignments?.every(assignment => 
+            completedAssignments.has(assignment.id)
+          );
+
+          if (allCompleted && assignments?.length > 0) {
+            completed.add(lesson.id);
+          }
         }
       }
 
-      // Add completion status to lessons
-      const courseWithProgress = {
-        ...courseData,
-        modules: courseData.modules
-          .sort((a, b) => a.order_index - b.order_index)
-          .map((module: any) => ({
-            ...module,
-            lessons: module.lessons
-              .sort((a: any, b: any) => a.order_index - b.order_index)
-              .map((lesson: any) => ({
-                ...lesson,
-                completed: progressData.some(p => p.lesson_id === lesson.id && p.completed)
-              }))
-          }))
-      };
+      setCompletedLessons(completed);
+    } catch (error: any) {
+      console.error("Error fetching completed lessons:", error);
+    }
+  };
 
-      return courseWithProgress as Course;
-    },
-    enabled: !!courseId
-  });
+  const handleStartLesson = (lessonId: string) => {
+    navigate(`/lesson/${lessonId}`);
+  };
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="animate-pulse space-y-6">
-            <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-            <div className="h-32 bg-gray-200 rounded"></div>
+      <MainLayout user={user}>
+        <div className="container mx-auto px-4 py-8">
+          <div className="animate-pulse">
+            <div className="h-8 bg-muted rounded w-1/3 mb-4"></div>
+            <div className="h-20 bg-muted rounded mb-6"></div>
             <div className="space-y-4">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-16 bg-muted rounded"></div>
               ))}
             </div>
           </div>
         </div>
-      </div>
+      </MainLayout>
     );
   }
 
-  if (error || !course) {
+  if (!course) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6">
-        <div className="max-w-4xl mx-auto text-center py-12">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Course Not Found</h1>
-          <p className="text-gray-600 mb-6">The course you're looking for doesn't exist or isn't published yet.</p>
-          <Link to="/">
-            <Button>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Home
-            </Button>
-          </Link>
+      <MainLayout user={user}>
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Course Not Found</h1>
+            <Link to="/courses">
+              <Button variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to All Courses
+              </Button>
+            </Link>
+          </div>
         </div>
-      </div>
+      </MainLayout>
     );
   }
-
-  const totalLessons = course.modules.reduce((acc, module) => acc + module.lessons.length, 0);
-  const completedLessons = course.modules.reduce((acc, module) => 
-    acc + module.lessons.filter(lesson => lesson.completed).length, 0
-  );
-  const progressPercentage = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
-  const totalXP = course.modules.reduce((acc, module) => 
-    acc + module.lessons.reduce((lessonAcc, lesson) => lessonAcc + lesson.xp_reward, 0), 0
-  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="max-w-4xl mx-auto p-6">
-        {/* Header */}
-        <div className="mb-6">
-          <Link to="/">
-            <Button variant="ghost" className="mb-4">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Courses
-            </Button>
-          </Link>
+    <MainLayout user={user}>
+      <div className="container mx-auto px-4 py-8">
+        {/* Back link */}
+        <Link to="/courses" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to All Courses
+        </Link>
 
-          <Card className="bg-white/80 backdrop-blur-md border-white/20">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle className="text-3xl font-bold mb-2">{course.title}</CardTitle>
-                  <CardDescription className="text-lg">{course.description}</CardDescription>
-                </div>
-                {course.thumbnail_url && (
-                  <img 
-                    src={course.thumbnail_url} 
-                    alt={course.title}
-                    className="w-24 h-24 object-cover rounded-lg ml-6"
-                  />
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{course.modules.length}</div>
-                  <div className="text-sm text-gray-600">Modules</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{totalLessons}</div>
-                  <div className="text-sm text-gray-600">Lessons</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-yellow-600">{totalXP}</div>
-                  <div className="text-sm text-gray-600">Total XP</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{Math.round(progressPercentage)}%</div>
-                  <div className="text-sm text-gray-600">Complete</div>
-                </div>
-              </div>
-              
-              {user && (
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${progressPercentage}%` }}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* Course header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-4">{course.title}</h1>
+          {course.description && (
+            <p className="text-muted-foreground text-lg">{course.description}</p>
+          )}
         </div>
 
-        {/* Modules and Lessons */}
-        <div className="space-y-6">
-          {course.modules.map((module, moduleIndex) => (
-            <Card key={module.id} className="bg-white/80 backdrop-blur-md border-white/20">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
-                    Module {moduleIndex + 1}
-                  </span>
-                  {module.title}
-                </CardTitle>
-                {module.description && (
-                  <CardDescription>{module.description}</CardDescription>
-                )}
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {module.lessons.map((lesson, lessonIndex) => (
-                    <div key={lesson.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                      <div className="flex items-center space-x-4">
-                        <div className="flex-shrink-0">
-                          {lesson.completed ? (
-                            <CheckCircle className="w-6 h-6 text-green-500" />
-                          ) : lesson.type === 'video' ? (
-                            <Play className="w-6 h-6 text-blue-500" />
-                          ) : lesson.type === 'quiz' ? (
-                            <BookOpen className="w-6 h-6 text-purple-500" />
-                          ) : (
-                            <Clock className="w-6 h-6 text-orange-500" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">
-                            {lessonIndex + 1}. {lesson.title}
-                          </h4>
-                          {lesson.description && (
-                            <p className="text-sm text-gray-600">{lesson.description}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <Badge variant="secondary" className="flex items-center space-x-1">
-                          <Trophy className="w-3 h-3" />
-                          <span>{lesson.xp_reward} XP</span>
-                        </Badge>
-                        <Link to={`/lesson/${lesson.id}`}>
-                          <Button size="sm">
-                            {lesson.completed ? 'Review' : 'Start'}
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        {/* Lessons list */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold mb-4">Course Lessons</h2>
+          
+          {lessons.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-muted-foreground">No lessons available for this course yet.</p>
               </CardContent>
             </Card>
-          ))}
+          ) : (
+            lessons.map((lesson, index) => (
+              <Card key={lesson.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="relative">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold">
+                          {index + 1}
+                        </div>
+                        {completedLessons.has(lesson.id) && (
+                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                            <CheckCircle className="h-4 w-4 text-white" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        {getLessonIcon(lesson.lesson_type)}
+                        <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                          {lesson.lesson_type}
+                        </span>
+                      </div>
+                      
+                      <div>
+                        <h3 className="font-semibold">{lesson.title}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {lesson.xp_reward} XP • {lesson.bits_reward} Bits
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <Button onClick={() => handleStartLesson(lesson.id)}>
+                      Start
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
       </div>
-    </div>
+    </MainLayout>
   );
 };
-
-export default CourseDetail;
